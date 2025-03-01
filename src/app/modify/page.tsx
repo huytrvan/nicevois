@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Delete } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Delete, ClipboardPenLine } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
 
@@ -47,12 +47,34 @@ const StepDivider = ({ isActive }: { isActive: boolean }) => (
 export default function ModifyLyricsPage() {
     // Remove the unused router variable
     const searchParams = useSearchParams();
-    
+
     const songId = searchParams.get('id');
     const songTitle = searchParams.get('title');
     const songArtist = searchParams.get('artist');
-    
-    const [lyrics, setLyrics] = useState<string>(`He seemed impressed by the way you came in
+
+    const [lyrics, setLyrics] = useState<string>('');
+    const [placeholder, setPlaceholder] = useState<string>('Change it from a breakup song to a graduation celebration about my nephew, Thomas...');
+    const [currentStep, setCurrentStep] = useState(2); // We're on step 2 - "Your Ideas"
+
+    // Rotating placeholder text
+    useEffect(() => {
+        const placeholders = [
+            'Change it from a breakup song to a graduation celebration about my nephew, Thomas...',
+            'Turn this into a birthday song for my mom who loves gardening...',
+            'Change it to be about our family\'s move to California and new adventures...'
+        ];
+
+        let currentIndex = 0;
+        const intervalId = setInterval(() => {
+            currentIndex = (currentIndex + 1) % placeholders.length;
+            setPlaceholder(placeholders[currentIndex]);
+        }, 2000);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
+    // Original lyrics to paste
+    const originalLyrics = `He seemed impressed by the way you came in
 "Tell us a story, I know you're not boring"
 I was afraid that you would not insist
 "You sound so sleepy, just take this, now leave me"
@@ -82,9 +104,7 @@ You ran me off the road
 The wait is over
 I'm now taking over
 You're no longer laughing
-I'm not drowning fast enough`);
-
-    const [currentStep, setCurrentStep] = useState(2); // We're on step 2 - "Your Ideas"
+I'm not drowning fast enough`;
 
     // Fetch lyrics based on song ID (if needed)
     useEffect(() => {
@@ -97,6 +117,10 @@ I'm not drowning fast enough`);
 
     const handleClearLyrics = () => {
         setLyrics('');
+    };
+
+    const handlePasteOriginal = () => {
+        setLyrics(originalLyrics);
     };
 
     const handleNextStep = () => {
@@ -185,18 +209,27 @@ I'm not drowning fast enough`);
 
                         <div data-orientation="horizontal" role="none" className="shrink-0 dark:bg-gray-100/5 h-[1.5px] w-full my-3 md:my-4 bg-primary/10"></div>
 
-                        {/* Instructions and Clear Button */}
+                        {/* Instructions and Buttons */}
                         <div className="flex w-full flex-col sm:flex-row items-start gap-3 sm:items-center">
                             <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-sm md:text-base text-white flex-1">
                                 Please describe your ideas for our AI writer OR paste the original lyrics and modify them.
                             </p>
-                            <button
-                                onClick={handleClearLyrics}
-                                className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:ring-destructive/50 focus-visible:ring focus-visible:ring-destructive/50 active:bg-destructive/75 active:ring-0 px-4 rounded-md w-full sm:w-auto text-sm md:text-base h-10 md:h-12"
-                                type="button"
-                            >
-                                <Delete className="size-4 md:size-5" /> Clear
-                            </button>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <button
+                                    onClick={handlePasteOriginal}
+                                    className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-4 rounded-md w-full sm:w-auto text-sm md:text-base h-10 md:h-12 bg-indigo-600 text-white hover:bg-indigo-700 ${lyrics !== '' ? 'hidden' : ''}`}
+                                    type="button"
+                                >
+                                    <ClipboardPenLine className="size-4 md:size-5" /> Paste Original
+                                </button>
+                                <button
+                                    onClick={handleClearLyrics}
+                                    className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:ring-destructive/50 focus-visible:ring focus-visible:ring-destructive/50 active:bg-destructive/75 active:ring-0 px-4 rounded-md w-full sm:w-auto text-sm md:text-base h-10 md:h-12 ${lyrics === '' ? 'hidden' : ''}`}
+                                    type="button"
+                                >
+                                    <Delete className="size-4 md:size-5" /> Clear Lyrics
+                                </button>
+                            </div>
                         </div>
 
                         {/* Lyrics Textarea */}
@@ -204,7 +237,7 @@ I'm not drowning fast enough`);
                             <fieldset className="mb-3.5 flex flex-col gap-0.5 last:mb-0 relative flex-1">
                                 <textarea
                                     className="flex rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary dark:text-white text-sm md:text-base text-primary min-h-[200px] md:min-h-[300px] resize-y w-full"
-                                    placeholder="Change it to be about our family's move to California and new adventures..."
+                                    placeholder={placeholder}
                                     rows={15}
                                     value={lyrics}
                                     onChange={(e) => setLyrics(e.target.value)}

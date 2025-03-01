@@ -1,11 +1,11 @@
-// pages/index.tsx or pages/search.tsx
+// src\app\page.tsx
 "use client";
 
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Search, Clock, X } from 'lucide-react';
 import React from "react";
-import { useRouter } from 'next/navigation'; // Add this for navigation
+import { useRouter } from 'next/navigation';
 
 // Types
 type StepProps = {
@@ -175,7 +175,7 @@ const SearchResults = ({ results, isLoading, onSelect }: {
 };
 
 const SearchPanel = () => {
-    const router = useRouter(); // Add router
+    const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [searchResults, setSearchResults] = useState<Song[]>([]);

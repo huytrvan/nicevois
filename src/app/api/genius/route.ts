@@ -1,3 +1,4 @@
+// src\app\api\genius\route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 const GENIUS_API_KEY = process.env.GENIUS_API_KEY;
@@ -8,20 +9,16 @@ type Song = {
     artist: string;
 };
 
-type GeniusHit = {
-    result: {
-        id: number;
-        title: string;
-        primary_artist: {
-            name: string;
-        };
-    };
-};
-
 type GeniusResponse = {
     response: {
-        hits: GeniusHit[];
-    };
+        hits: Array<{
+            result: {
+                id: number;
+                title: string;
+                artist_names: string;
+            }
+        }>
+    }
 };
 
 const mockResults: Song[] = [
@@ -43,8 +40,6 @@ const allowedOrigins = [
 ];
 
 export async function GET(req: NextRequest) {
-    // console.log("Received request:", req.url);  // Debugging
-
     const query = req.nextUrl.searchParams.get('q');
 
     if (!query) {
@@ -79,12 +74,17 @@ export async function GET(req: NextRequest) {
         }
 
         const data: GeniusResponse = await response.json();
+        
+        // Transform the response to match our Song type
+        const songs: Song[] = data.response.hits.map((hit) => ({
+            id: hit.result.id.toString(),
+            title: hit.result.title,
+            // Use artist_names instead of primary_artist.name
+            artist: hit.result.artist_names
+        }));
+
         return new NextResponse(
-            JSON.stringify(data.response.hits.map((hit) => ({
-                id: hit.result.id.toString(),
-                title: hit.result.title,
-                artist: hit.result.primary_artist.name,
-            }))),
+            JSON.stringify(songs),
             { status: 200, headers: corsHeaders(req) }
         );
     } catch (error) {
