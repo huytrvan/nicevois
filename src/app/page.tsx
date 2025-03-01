@@ -1,8 +1,9 @@
 "use client";
 
 import Image from 'next/image';
-import { useState } from 'react';
-import { Search, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Clock, X } from 'lucide-react';
+import React from "react";
 
 // Types
 type StepProps = {
@@ -18,6 +19,12 @@ type TabProps = {
     isActive: boolean;
     onClick: () => void;
 };
+
+type Song = {
+    id: string;
+    title: string;
+    artist: string;
+}
 
 // Components
 const StepIndicator = ({ step, label, isActive }: StepProps) => (
@@ -111,8 +118,116 @@ const EmptyState = () => (
     </div>
 );
 
+// Loading indicator component
+const LoadingIndicator = () => (
+    <div className="absolute -right-5 top-1/2 -translate-y-1/2">
+        <div className="loader-variant-equalizer text-primary scale-[0.45] rotate-180">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </div>
+);
+
+// Search Results component
+const SearchResults = ({ results, isLoading, onSelect }: { 
+    results: Song[], 
+    isLoading: boolean,
+    onSelect: (song: Song) => void 
+}) => {
+    if (results.length === 0 && !isLoading) {
+        return null;
+    }
+
+    return (
+        <div dir="ltr" className="relative overflow-hidden flex-1 w-full rounded-md border bg-white max-h-[calc(100vh-20rem)] md:max-h-[calc(100vh-22rem)] overflow-y-auto" 
+            style={{ position: 'relative', '--radix-scroll-area-corner-width': '0px', '--radix-scroll-area-corner-height': '0px' } as React.CSSProperties}>
+            <style>
+                {`[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}
+                [data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}`}
+            </style>
+            <div data-radix-scroll-area-viewport="" className="size-full rounded-[inherit]" style={{ overflow: 'hidden scroll' }}>
+                <div style={{ minWidth: '100%', display: 'table' }}>
+                    {results.map((song, index) => (
+                        <React.Fragment key={song.id}>
+                            <div className="relative cursor-pointer p-3 md:p-4 hover:bg-gray-200/20 transition-colors" onClick={() => onSelect(song)}>
+                                <div className="pr-12">
+                                    <h5 className="scroll-m-20 font-azbuka tracking-normal dark:text-white text-sm md:text-base text-primary truncate">
+                                        {song.title}
+                                    </h5>
+                                    <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-xs md:text-sm text-muted truncate">
+                                        {song.artist}
+                                    </p>
+                                </div>
+                            </div>
+                            {index < results.length - 1 && (
+                                <div data-orientation="horizontal" role="none" className="shrink-0 bg-gray-200 dark:bg-gray-100/5 h-[1.5px] w-full"></div>
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const SearchPanel = () => {
     const [searchQuery, setSearchQuery] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [searchResults, setSearchResults] = useState<Song[]>([]);
+    const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+    const [showResults, setShowResults] = useState(false);
+
+    // Function to search the Genius API
+    const searchGenius = async (query: string) => {
+        console.log("Searching for:", query);
+
+        if (!query || !query.trim()) {
+            setSearchResults([]);
+            setShowResults(false);
+            return;
+        }
+
+        setIsLoading(true);
+        setShowResults(true);
+
+        try {
+            const response = await fetch(`/api/genius?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch songs: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid API response format');
+            }
+
+            setSearchResults(data); // No `.songs` key, API returns array directly
+        } catch (error) {
+            console.error("Error searching Genius API:", error);
+            setSearchResults([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+
+
+    // Debounce the search to avoid too many API calls
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            searchGenius(searchQuery);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const handleSelectSong = (song: Song) => {
+        setSelectedSong(song);
+        setShowResults(false);
+        // Here you would typically fetch the lyrics for the selected song
+    };
 
     return (
         <div className="py-6 mt-4 flex flex-1 flex-col gap-4">
@@ -125,19 +240,53 @@ const SearchPanel = () => {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-400" />
                     <input
                         className="flex w-full rounded-md border border-component-input
-              h-10 md:h-12 pl-10 pr-8 text-sm md:text-base text-primary
-              bg-foundation px-3 py-1 shadow-sm shadow-black/10 transition-colors
-              dark:bg-foundation-secondary dark:text-white dark:placeholder:text-muted/75
-              focus-visible:outline-none focus-visible:ring focus-visible:ring-secondary/50"
+                        h-10 md:h-12 pl-10 pr-8 text-sm md:text-base text-primary
+                        bg-foundation px-3 py-1 shadow-sm shadow-black/10 transition-colors text-gray-900
+                        dark:bg-foundation-secondary dark:text-white dark:placeholder:text-muted/75
+                        focus-visible:outline-none focus-visible:ring focus-visible:ring-secondary/50"
                         type="text"
                         placeholder="Search for a Song..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
+                    {isLoading && <LoadingIndicator />}
+                    {searchQuery && !isLoading && (
+                        <button 
+                            className="absolute right-3 top-1/2 -translate-y-1/2"
+                            onClick={() => {
+                                setSearchQuery('');
+                                setShowResults(false);
+                            }}
+                        >
+                            <X className="size-4 md:size-5 text-gray-400" />
+                        </button>
+                    )}
                 </fieldset>
             </form>
 
-            <EmptyState />
+            {showResults ? (
+                <SearchResults 
+                    results={searchResults} 
+                    isLoading={isLoading} 
+                    onSelect={handleSelectSong}
+                />
+            ) : selectedSong ? (
+                <div className="flex flex-col gap-3">
+                    <div className="p-4 bg-primary/10 rounded-lg">
+                        <h3 className="text-lg text-white font-azbuka tracking-normal">
+                            {selectedSong.title}
+                        </h3>
+                        <p className="text-sm text-white/80 font-roboto tracking-wide">
+                            {selectedSong.artist}
+                        </p>
+                    </div>
+                    <p className="text-sm text-white font-roboto">
+                        Lyrics will be loaded here...
+                    </p>
+                </div>
+            ) : (
+                <EmptyState />
+            )}
         </div>
     );
 };
@@ -150,6 +299,7 @@ const ManualEntryPanel = () => (
 );
 
 export default function LyricChangerPage() {
+
     const [activeTab, setActiveTab] = useState<'search' | 'manual'>('search');
     const [currentStep, setCurrentStep] = useState(1);
 
@@ -181,8 +331,8 @@ export default function LyricChangerPage() {
                         <div className="container mx-auto flex justify-end">
                             <button
                                 className="h-10 px-4 py-2 bg-primary hover:bg-primary/90 text-neutral-50
-                  inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md
-                  text-sm font-medium transition-colors focus-visible:outline-none"
+                                inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md
+                                text-sm font-medium transition-colors focus-visible:outline-none"
                                 type="button"
                             >
                                 Sign In to Save Lyrics
@@ -194,15 +344,14 @@ export default function LyricChangerPage() {
                     <div className="flex flex-col space-y-4 md:space-y-6">
                         <section className="flex items-center gap-2">
                             {steps.map((step, index) => (
-                                <>
+                                <React.Fragment key={step.step}>
                                     <StepIndicator
-                                        key={step.step}
                                         step={step.step}
                                         label={step.label}
                                         isActive={currentStep === step.step}
                                     />
                                     {index < steps.length - 1 && <StepDivider key={`divider-${index}`} />}
-                                </>
+                                </React.Fragment>
                             ))}
                         </section>
                     </div>
@@ -210,7 +359,7 @@ export default function LyricChangerPage() {
                     {/* Content Section */}
                     <div className="flex flex-1 flex-col space-y-2">
                         <h3 className="my-2 md:my-4 text-[22px] md:text-[28px] text-white 
-              font-azbuka tracking-normal duration-1000 ease-in-out animate-in fade-in">
+                        font-azbuka tracking-normal duration-1000 ease-in-out animate-in fade-in">
                             Add The Original Song
                         </h3>
 
@@ -219,8 +368,8 @@ export default function LyricChangerPage() {
                         {/* Tabs */}
                         <div className="flex-1">
                             <div className="h-12 my-2 -mb-3 grid w-full grid-cols-2 gap-2 rounded-full p-0
-                items-center justify-center text-muted-foreground bg-transparent
-                dark:bg-foundation-secondary"
+                            items-center justify-center text-muted-foreground bg-transparent
+                            dark:bg-foundation-secondary"
                                 role="tablist"
                             >
                                 <Tab
