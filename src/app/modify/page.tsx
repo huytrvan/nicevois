@@ -46,7 +46,6 @@ const StepDivider = ({ isActive }: { isActive: boolean }) => (
 );
 
 export default function ModifyLyricsPage() {
-    // Remove the unused router variable
     const searchParams = useSearchParams();
 
     const songId = searchParams.get('id');
@@ -54,6 +53,7 @@ export default function ModifyLyricsPage() {
     const songArtist = searchParams.get('artist');
 
     const [lyrics, setLyrics] = useState<string>('');
+    const [originalLyrics, setOriginalLyrics] = useState<string>(''); // Store the original lyrics
     const [placeholder, setPlaceholder] = useState<string>('Change it from a breakup song to a graduation celebration about my nephew, Thomas...');
     const [currentStep, setCurrentStep] = useState(2); // We're on step 2 - "Your Ideas"
 
@@ -74,22 +74,29 @@ export default function ModifyLyricsPage() {
         return () => clearInterval(intervalId);
     }, []);
 
-    // Original lyrics to paste
-    const originalLyrics = ``;
-    // Fetch lyrics based on song ID (if needed)
     useEffect(() => {
         if (songId) {
-            // You could fetch the actual lyrics here
-            console.log(`Fetching lyrics for song ID: ${songId}`);
-            // Example: fetchLyrics(songId).then(data => setLyrics(data.lyrics));
+            fetch(`/api/genius/lyrics?id=${songId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.lyrics) {
+                        setLyrics(data.lyrics);
+                        setOriginalLyrics(data.lyrics); // Save the original lyrics
+                    } else {
+                        console.error('Lyrics not found');
+                    }
+                })
+                .catch(error => console.error('Error fetching lyrics:', error));
         }
     }, [songId]);
+
 
     const handleClearLyrics = () => {
         setLyrics('');
     };
 
     const handlePasteOriginal = () => {
+        console.log("Restoring Lyrics:", originalLyrics);
         setLyrics(originalLyrics);
     };
 

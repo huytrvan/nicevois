@@ -22,7 +22,7 @@ type GeniusResponse = {
 };
 
 const mockResults: Song[] = [
-    { id: '1', title: 'Reptilia', artist: 'The Strokes' },
+    { id: '12345', title: 'Reptilia', artist: 'The Strokes' },
     { id: '2', title: 'Reptile', artist: 'Nine Inch Nails' },
     { id: '3', title: 'No Reptiles', artist: 'Everything Everything' },
     { id: '4', title: 'Minecraftcito (Despacito 3)', artist: 'ReptileLegitYT' },
