@@ -303,6 +303,7 @@ const ManualEntryPanel = () => (
 
 export default function LyricChangerPage() {
     const [activeTab, setActiveTab] = useState<'search' | 'manual'>('search');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [currentStep, setCurrentStep] = useState(1);
 
     const steps = [
