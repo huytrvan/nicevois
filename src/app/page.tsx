@@ -1,9 +1,11 @@
+// pages/index.tsx or pages/search.tsx
 "use client";
 
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Search, Clock, X } from 'lucide-react';
 import React from "react";
+import { useRouter } from 'next/navigation'; // Add this for navigation
 
 // Types
 type StepProps = {
@@ -173,6 +175,7 @@ const SearchResults = ({ results, isLoading, onSelect }: {
 };
 
 const SearchPanel = () => {
+    const router = useRouter(); // Add router
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [searchResults, setSearchResults] = useState<Song[]>([]);
@@ -204,7 +207,7 @@ const SearchPanel = () => {
                 throw new Error('Invalid API response format');
             }
 
-            setSearchResults(data); // No `.songs` key, API returns array directly
+            setSearchResults(data);
         } catch (error) {
             console.error("Error searching Genius API:", error);
             setSearchResults([]);
@@ -212,8 +215,6 @@ const SearchPanel = () => {
             setIsLoading(false);
         }
     };
-
-
 
     // Debounce the search to avoid too many API calls
     useEffect(() => {
@@ -226,7 +227,9 @@ const SearchPanel = () => {
     const handleSelectSong = (song: Song) => {
         setSelectedSong(song);
         setShowResults(false);
-        // Here you would typically fetch the lyrics for the selected song
+        
+        // Navigate to the modify page with query parameters
+        router.push(`/modify?id=${song.id}&title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
     };
 
     return (
@@ -281,7 +284,7 @@ const SearchPanel = () => {
                         </p>
                     </div>
                     <p className="text-sm text-white font-roboto">
-                        Lyrics will be loaded here...
+                        Loading lyrics...
                     </p>
                 </div>
             ) : (
@@ -299,7 +302,6 @@ const ManualEntryPanel = () => (
 );
 
 export default function LyricChangerPage() {
-
     const [activeTab, setActiveTab] = useState<'search' | 'manual'>('search');
     const [currentStep, setCurrentStep] = useState(1);
 
@@ -309,18 +311,6 @@ export default function LyricChangerPage() {
         { step: 3, label: "Review" },
         { step: 4, label: "Add-Ons" }
     ];
-
-    const goToNextStep = () => {
-        if (currentStep < steps.length) {
-            setCurrentStep(currentStep + 1);
-        }
-    };
-
-    const goToPreviousStep = () => {
-        if (currentStep > 1) {
-            setCurrentStep(currentStep - 1);
-        }
-    };
 
     return (
         <main className="min-h-0 w-full">
