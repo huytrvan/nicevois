@@ -147,62 +147,90 @@ export default function ChangeLyricsPage() {
                 if (storedLyrics) {
                     setOriginalLyricsText(storedLyrics);
                     setLyrics(generateLyricsData(storedLyrics));
+                    setFormValues(prev => ({ ...prev, lyrics: storedLyrics }));
                     // Clear localStorage after retrieving
                     localStorage.removeItem('manualEntryLyrics');
+                } else {
+                    // Handle case when localStorage is empty but isManualEntry is true
+                    setFormErrors(prev => ({ ...prev, general: 'No lyrics found. Please try again.' }));
                 }
             } catch (error) {
                 console.error('Error retrieving lyrics from localStorage:', error);
+                setFormErrors(prev => ({ ...prev, general: 'Error loading lyrics. Please try again.' }));
             }
         }
-    }, [isManualEntry]);
+    }, [isManualEntry]); // Remove isLoading and originalLyricsText from dependencies
 
     // Fetch lyrics from API if songId is available
     useEffect(() => {
-        if (songId) {
-            setIsLoading(true);
-            fetch(`/api/genius/lyrics?id=${songId}`)
-                .then(response => response.json())
-                .then(data => {
+        let isMounted = true; // For cleanup
+
+        const fetchLyrics = async () => {
+            if (!songId && !songUrl && !isManualEntry) {
+                router.push('/');
+                return;
+            }
+
+            if (songId) {
+                setIsLoading(true);
+                try {
+                    const response = await fetch(`/api/genius/lyrics?id=${songId}`);
+                    const data = await response.json();
+
+                    if (!isMounted) return;
+
                     setIsLoading(false);
                     if (data.lyrics) {
                         setOriginalLyricsText(data.lyrics);
                         setLyrics(generateLyricsData(data.lyrics));
                         setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
                     } else {
+                        setFormErrors(prev => ({ ...prev, general: 'Lyrics not found' }));
                         console.error('Lyrics not found');
                     }
-                })
-                .catch(error => {
+                } catch (error) {
+                    if (!isMounted) return;
+
                     setIsLoading(false);
+                    setFormErrors(prev => ({ ...prev, general: 'Error loading lyrics' }));
                     console.error('Error fetching lyrics:', error);
-                });
-        } else if (songUrl && !isManualEntry) {
-            // If we have a songUrl but no songId and it's not a manual entry,
-            // fetch lyrics from the URL
-            setIsLoading(true);
-            fetch(`/api/genius/lyrics-by-url?url=${encodeURIComponent(songUrl)}`)
-                .then(response => response.json())
-                .then(data => {
+                }
+            } else if (songUrl && !isManualEntry) {
+                // If we have a songUrl but no songId and it's not a manual entry,
+                // fetch lyrics from the URL
+                setIsLoading(true);
+                try {
+                    const response = await fetch(`/api/genius/lyrics-by-url?url=${encodeURIComponent(songUrl)}`);
+                    const data = await response.json();
+
+                    if (!isMounted) return;
+
                     setIsLoading(false);
                     if (data.lyrics) {
                         setOriginalLyricsText(data.lyrics);
                         setLyrics(generateLyricsData(data.lyrics));
                         setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
                     } else {
+                        setFormErrors(prev => ({ ...prev, general: 'Lyrics not found from URL' }));
                         console.error('Lyrics not found from URL');
                     }
-                })
-                .catch(error => {
+                } catch (error) {
+                    if (!isMounted) return;
+
                     setIsLoading(false);
+                    setFormErrors(prev => ({ ...prev, general: 'Error fetching lyrics' }));
                     console.error('Error fetching lyrics from URL:', error);
-                });
-        } else {
-            // Redirect if original lyrics are empty
-            if (!isLoading && !originalLyricsText) {
-                router.push('/');
+                }
             }
-        }
-    }, [songId, songUrl, isManualEntry, router]);
+        };
+
+        fetchLyrics();
+
+        // Cleanup function
+        return () => {
+            isMounted = false;
+        };
+    }, [songId, songUrl, isManualEntry, router]); // Removed originalLyricsText and isLoading
 
 
     // Redirect if original lyrics are empty
@@ -441,7 +469,8 @@ export default function ChangeLyricsPage() {
                                                 <ListMusic className="-mt-0.5 mr-1 size-4 md:size-5 md:mt-0.5" />
                                                 <span>
                                                     <strong>Total Word Changes: {totalWordChanges}</strong> <br />
-                                                    Recommended Package: <strong>5 words ($49.95)</strong>
+                                                    Base pricing: <strong>$35</strong> (starting from first word) <br />
+                                                    With every word changed: <strong>+$5 / word</strong>
                                                 </span>
                                             </span>
                                         </p>
