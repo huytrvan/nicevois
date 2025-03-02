@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Check, ChevronLeft, ChevronRight, TicketPercent } from 'lucide-react';
 import Link from 'next/link';
@@ -89,7 +89,7 @@ const StepDivider = ({ isActive }: { isActive: boolean }) => (
     />
 );
 
-export default function ChangeLyricsPage() {
+function ReviewPageContent() {
     // Get URL parameters
     const searchParams = useSearchParams();
     const songId = searchParams.get('id');
@@ -411,12 +411,12 @@ export default function ChangeLyricsPage() {
                             {/* Navigation Buttons */}
                             <div className="flex flex-row items-center gap-2 py-0">
                                 {/* Go back with all the state data */}
-                                <Link href="/change-lyrics" className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-[1.5px] bg-white hover:text-black hover:ring-gray-200/65 focus-visible:ring focus-visible:ring-gray-200/65 active:bg-gray-200 active:ring-0 dark:border-gray-100/25 dark:text-white dark:hover:bg-gray-100/15 dark:hover:text-white dark:hover:ring-gray-100/15 dark:focus-visible:ring-gray-100/15 dark:active:bg-gray-100/25 px-5 rounded-md text-sm md:text-base h-10 md:h-12">
+                                <Link href="/change-lyrics" className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-[1.5px] bg-white hover:bg-white/95 hover:ring-gray-200/65 focus-visible:ring focus-visible:ring-gray-200/65 active:bg-gray-200 active:ring-0  dark:hover:ring-gray-100/15 dark:focus-visible:ring-gray-100/15 dark:active:bg-gray-100/25 px-5 rounded-md text-sm md:text-base h-10 md:h-12">
                                     <ChevronLeft className="-ml-1 size-4 md:size-5" /> Back
                                 </Link>
                                 <button
                                     onClick={handleNextStep}
-                                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
+                                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
                                     type="button"
                                 >
                                     Checkout <ChevronRight className="-mr-1 size-4 md:size-5" />
@@ -448,7 +448,7 @@ export default function ChangeLyricsPage() {
                             {/* Lyrics editor */}
                             {!isLoading && (
                                 <div className="flex flex-col space-y-2 overflow-y-auto md:h-auto lg:h-full">
-                                    <div className="space-y-4 my-4">
+                                    <div className="space-y-2 my-6">
                                         {/* Delivery Options */}
                                         {productOptions
                                             .filter(product => product.type === 'delivery')
@@ -472,7 +472,7 @@ export default function ChangeLyricsPage() {
                                                             )}
                                                         </button>
                                                         <div className="ml-1 space-y-0.5">
-                                                            <span className="relative -top-0.5 font-medium">{product.title}</span>
+                                                            <span className="relative -top-0.5 font-medium text-blue-800 text-lg">{product.title}</span>
                                                             <p className="text-sm text-gray-500">{product.description}</p>
                                                         </div>
                                                     </div>
@@ -508,5 +508,18 @@ export default function ChangeLyricsPage() {
                 </section>
             </div>
         </main>
+    );
+}
+
+// Main component that wraps the content with Suspense
+export default function ReviewPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center h-screen">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+            </div>
+        }>
+            <ReviewPageContent />
+        </Suspense>
     );
 }
