@@ -144,7 +144,14 @@ export default function ChangeLyricsPage() {
         (sum, line) => sum + line.wordChanges.filter(w => w.hasChanged).length,
         0
     );
-    const cost = totalWordChanges * 5; // $5 per word change
+    const [cost, setCost] = useState(35); // Start with base cost of $35
+
+    // Update cost whenever word changes are modified
+    useEffect(() => {
+        const baseCost = 35;
+        const additionalCost = totalWordChanges * 5;
+        setCost(baseCost + additionalCost);
+    }, [totalWordChanges]);
 
     // Check for manually entered lyrics from localStorage
     useEffect(() => {
@@ -347,7 +354,7 @@ export default function ChangeLyricsPage() {
             localStorage.setItem('manualEntryLyrics', formValues.lyrics);
 
             // Navigate to the checkout step
-            router.push(`/checkout`);
+            router.push(`/review`);
         } else {
             // Show toast with the first error
             const firstError = Object.values(formErrors)[0];
@@ -368,7 +375,7 @@ export default function ChangeLyricsPage() {
     const steps = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: true },
         { step: 2, label: "Change The Lyrics", isActive: currentStep === 2, isComplete: false },
-        { step: 3, label: "Review & Check-out", isActive: currentStep === 3, isComplete: false },
+        { step: 3, label: "Review Order", isActive: currentStep === 3, isComplete: false },
     ];
 
     return (

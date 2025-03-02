@@ -467,7 +467,7 @@ export default function LyricChangerPage() {
     const steps = [
         { step: 1, label: "Choose A Song" },
         { step: 2, label: "Change The Lyrics" },
-        { step: 3, label: "Review & Check-out" },
+        { step: 3, label: "Review" },
     ];
 
     return (
