@@ -473,13 +473,19 @@ export default function LyricChangerPage() {
 
     return (
         <main className="min-h-0 w-full">
-            <div className="w-full min-h-full group toaster">
+            <div className="w-full min-h-full">
                 <Toaster
                     position="top-center"
                     toastOptions={{
-                        className: "border shadow-lg rounded-lg bg-destructive text-white border-destructive-foreground"
+                        style: {
+                            marginTop: "7rem",
+                            padding: "16px",
+                            color: "oklch(0.396 0.141 25.723)",
+                            backgroundColor: "oklch(0.971 0.013 17.38)"
+                        },
                     }}
                 />
+
                 {/* Rest of your component remains the same */}
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-4 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
                     {/* Header/Nav */}

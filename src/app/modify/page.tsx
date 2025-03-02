@@ -5,64 +5,12 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Delete, ClipboardPenLine } from 'lucide-react';
 import Link from 'next/link';
-import React from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
 import * as Separator from '@radix-ui/react-separator';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import * as Tooltip from '@radix-ui/react-tooltip';
 import SignInToSaveButton from "@/components/SignInToSaveButton";
-
-type StepProps = {
-    step: number;
-    label: string;
-    isActive: boolean;
-    isComplete?: boolean;
-};
-
-const StepIndicator = ({ step, label, isActive, isComplete }: StepProps) => (
-    <Tooltip.Provider>
-        <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-                <div className="flex flex-col items-center" style={{ opacity: 1, transform: 'translateY(2px)' }}>
-                    <button
-                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 size-6 rounded-full p-0 active:scale-90 peer font-roboto disabled:bg-white/80 disabled:text-primary disabled:opacity-10"
-                        type="button"
-                        role="tab"
-                        disabled={!isActive && !isComplete}
-                    >
-                        {isComplete ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-                                <path d="M20 6 9 17l-5-5"></path>
-                            </svg>
-                        ) : (
-                            step
-                        )}
-                    </button>
-                    <p className="scroll-m-20 font-roboto text-sm leading-normal tracking-wide dark:text-white mt-2 text-center font-semibold text-white peer-disabled:font-normal peer-disabled:opacity-10">
-                        {label}
-                    </p>
-                </div>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-                <Tooltip.Content
-                    className="bg-black/90 text-white px-3 py-1.5 rounded text-sm"
-                    sideOffset={5}
-                >
-                    {label}
-                    <Tooltip.Arrow className="fill-black/90" />
-                </Tooltip.Content>
-            </Tooltip.Portal>
-        </Tooltip.Root>
-    </Tooltip.Provider>
-);
-
-const StepDivider = ({ isActive }: { isActive: boolean }) => (
-    <Separator.Root
-        orientation="horizontal"
-        className={`dark:bg-gray-100/5 w-full -mt-6 h-[1.75px] flex-1 duration-1000 animate-in fade-in ${isActive ? "bg-primary/30" : "bg-white/5"}`}
-    />
-);
+import { StepIndicators, StepsConfig } from '@/components/layouts/StepIndicator';
 
 export default function ModifyLyricsPage() {
     const searchParams = useSearchParams();
@@ -115,8 +63,6 @@ export default function ModifyLyricsPage() {
         }
     }, [isManualEntry]);
 
-
-
     // Fetch lyrics from API if songId is available
     useEffect(() => {
         if (songId) {
@@ -159,7 +105,6 @@ export default function ModifyLyricsPage() {
         }
     }, [songId, songUrl, isManualEntry]);
 
-
     const handleClearLyrics = () => {
         setLyrics('');
     };
@@ -175,7 +120,13 @@ export default function ModifyLyricsPage() {
         }
     };
 
-    const steps = [
+    const handleStepChange = (step: number) => {
+        if (step <= currentStep) {
+            setCurrentStep(step);
+        }
+    };
+
+    const steps: StepsConfig[] = [
         { step: 1, label: "Original", isActive: currentStep === 1, isComplete: true },
         { step: 2, label: "Your Ideas", isActive: currentStep === 2, isComplete: false },
         { step: 3, label: "Review", isActive: currentStep === 3, isComplete: false },
@@ -199,29 +150,15 @@ export default function ModifyLyricsPage() {
                         className="flex flex-col space-y-4 md:space-y-6"
                         onValueChange={(value) => {
                             const step = parseInt(value.split('-')[1]);
-                            if (step <= currentStep) {
-                                setCurrentStep(step);
-                            }
+                            handleStepChange(step);
                         }}
                     >
                         <Tabs.List className="flex items-center gap-2">
-                            {steps.map((step, index) => (
-                                <React.Fragment key={step.step}>
-                                    <Tabs.Trigger value={`step-${step.step}`} asChild>
-                                        <div>
-                                            <StepIndicator
-                                                step={step.step}
-                                                label={step.label}
-                                                isActive={step.isActive}
-                                                isComplete={step.isComplete}
-                                            />
-                                        </div>
-                                    </Tabs.Trigger>
-                                    {index < steps.length - 1 && (
-                                        <StepDivider isActive={index === 0 || (currentStep > index + 1)} />
-                                    )}
-                                </React.Fragment>
-                            ))}
+                            <StepIndicators
+                                steps={steps}
+                                currentStep={currentStep}
+                                onStepChange={handleStepChange}
+                            />
                         </Tabs.List>
 
                         {/* Content Section */}
