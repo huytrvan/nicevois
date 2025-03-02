@@ -6,20 +6,14 @@ import { useState, useEffect } from 'react';
 import { Search, Clock, X } from 'lucide-react';
 import React from "react";
 import { useRouter } from 'next/navigation';
+import * as Tabs from '@radix-ui/react-tabs';
+import * as ScrollArea from '@radix-ui/react-scroll-area';
 
 // Types
 type StepProps = {
     step: number;
     label: string;
     isActive: boolean;
-};
-
-type TabProps = {
-    id: string;
-    label: string;
-    icon: React.ReactNode;
-    isActive: boolean;
-    onClick: () => void;
 };
 
 type Song = {
@@ -56,25 +50,6 @@ const StepDivider = () => (
         className="w-full h-[1.75px] -mt-6 flex-1 bg-white/5 dark:bg-gray-100/5 
       duration-1000 animate-in fade-in"
     />
-);
-
-const Tab = ({ id, label, icon, isActive, onClick }: TabProps) => (
-    <button
-        id={`tab-${id}`}
-        role="tab"
-        aria-selected={isActive}
-        aria-controls={`tabpanel-${id}`}
-        data-state={isActive ? 'active' : 'inactive'}
-        onClick={onClick}
-        className={`inline-flex h-11 items-center justify-center rounded-full px-3 py-1.5
-        whitespace-nowrap font-medium transition-all
-        bg-primary/10 text-white text-xs md:text-sm
-        hover:bg-primary/15 hover:ring hover:ring-secondary/20
-        ${isActive ? "bg-primary font-semibold shadow-sm" : ""}`}
-    >
-        {icon}
-        {label}
-    </button>
 );
 
 const InfoCard = () => (
@@ -133,24 +108,19 @@ const LoadingIndicator = () => (
 );
 
 // Search Results component
-const SearchResults = ({ results, isLoading, onSelect }: { 
-    results: Song[], 
+const SearchResults = ({ results, isLoading, onSelect }: {
+    results: Song[],
     isLoading: boolean,
-    onSelect: (song: Song) => void 
+    onSelect: (song: Song) => void
 }) => {
     if (results.length === 0 && !isLoading) {
         return null;
     }
 
     return (
-        <div dir="ltr" className="relative overflow-hidden flex-1 w-full rounded-md border bg-white max-h-[calc(100vh-20rem)] md:max-h-[calc(100vh-22rem)] overflow-y-auto" 
-            style={{ position: 'relative', '--radix-scroll-area-corner-width': '0px', '--radix-scroll-area-corner-height': '0px' } as React.CSSProperties}>
-            <style>
-                {`[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}
-                [data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}`}
-            </style>
-            <div data-radix-scroll-area-viewport="" className="size-full rounded-[inherit]" style={{ overflow: 'hidden scroll' }}>
-                <div style={{ minWidth: '100%', display: 'table' }}>
+        <ScrollArea.Root className="relative overflow-hidden flex-1 w-full rounded-md border bg-white max-h-[calc(100vh-20rem)] md:max-h-[calc(100vh-22rem)]">
+            <ScrollArea.Viewport className="size-full rounded-[inherit]">
+                <div>
                     {results.map((song, index) => (
                         <React.Fragment key={song.id}>
                             <div className="relative cursor-pointer p-3 md:p-4 hover:bg-gray-200/20 transition-colors" onClick={() => onSelect(song)}>
@@ -164,13 +134,17 @@ const SearchResults = ({ results, isLoading, onSelect }: {
                                 </div>
                             </div>
                             {index < results.length - 1 && (
-                                <div data-orientation="horizontal" role="none" className="shrink-0 bg-gray-200 dark:bg-gray-100/5 h-[1.5px] w-full"></div>
+                                <div className="shrink-0 bg-gray-200 dark:bg-gray-100/5 h-[1.5px] w-full"></div>
                             )}
                         </React.Fragment>
                     ))}
                 </div>
-            </div>
-        </div>
+            </ScrollArea.Viewport>
+            <ScrollArea.Scrollbar orientation="vertical" className="flex select-none touch-none p-0.5 bg-black/5 transition-colors duration-150 ease-out hover:bg-black/10 data-[orientation=vertical]:w-2.5 data-[orientation=horizontal]:flex-col data-[orientation=horizontal]:h-2.5">
+                <ScrollArea.Thumb className="flex-1 bg-black/20 rounded-full relative before:content-[''] before:absolute before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:w-full before:h-full before:min-w-[44px] before:min-h-[44px]" />
+            </ScrollArea.Scrollbar>
+            <ScrollArea.Corner className="bg-black/5" />
+        </ScrollArea.Root>
     );
 };
 
@@ -202,7 +176,7 @@ const SearchPanel = () => {
             }
 
             const data = await response.json();
-            
+
             if (!Array.isArray(data)) {
                 throw new Error('Invalid API response format');
             }
@@ -227,7 +201,7 @@ const SearchPanel = () => {
     const handleSelectSong = (song: Song) => {
         setSelectedSong(song);
         setShowResults(false);
-        
+
         // Navigate to the modify page with query parameters
         router.push(`/modify?id=${song.id}&title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
     };
@@ -254,7 +228,7 @@ const SearchPanel = () => {
                     />
                     {isLoading && <LoadingIndicator />}
                     {searchQuery && !isLoading && (
-                        <button 
+                        <button
                             className="absolute right-3 top-1/2 -translate-y-1/2"
                             onClick={() => {
                                 setSearchQuery('');
@@ -268,9 +242,9 @@ const SearchPanel = () => {
             </form>
 
             {showResults ? (
-                <SearchResults 
-                    results={searchResults} 
-                    isLoading={isLoading} 
+                <SearchResults
+                    results={searchResults}
+                    isLoading={isLoading}
                     onSelect={handleSelectSong}
                 />
             ) : selectedSong ? (
@@ -295,15 +269,41 @@ const SearchPanel = () => {
 };
 
 const ManualEntryPanel = () => (
-    <div className="py-6 mt-4">
-        {/* Manual entry content will go here */}
-        <p className="text-white">Add your song URL and lyrics manually here</p>
+    <div className="py-6 mt-4 flex flex-1 flex-col gap-4">
+        <form className="flex flex-col gap-4">
+            <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-sm md:text-base text-white">
+                Please add the URL of the original song. <a className="font-semibold text-white underline" href="https://youtube.com/" target="_blank">Search YouTube</a> or use a cloud storage link.
+            </p>
+
+            <fieldset className="mb-3.5 flex flex-col gap-0.5 last:mb-0 relative">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-link absolute left-3 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-400">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg>
+                <input className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-1 shadow-sm shadow-black/10 transition-colors file:mr-1.5 file:mt-1.5 file:cursor-pointer file:border-0 file:bg-transparent file:p-0 file:text-sm file:font-medium file:text-foundation-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-secondary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary dark:text-white dark:placeholder:text-muted/75 h-10 md:h-12 pl-10 text-sm md:text-base text-primary" placeholder="https://..." type="text" value="" />
+            </fieldset>
+
+            <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-sm md:text-base text-white">
+                Please add the lyrics from the original song. <a className="font-semibold text-white underline" href="https://songmeanings.com/" target="_blank">Search for Lyrics</a>
+            </p>
+
+            <fieldset className="mb-3.5 flex flex-col gap-0.5 last:mb-0 relative">
+                <textarea className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary dark:text-white text-sm md:text-base text-primary min-h-[200px] md:min-h-[300px] resize-y" placeholder="Paste the original lyrics here..." rows="10"></textarea>
+            </fieldset>
+        </form>
+
+        <div className="flex flex-row py-4">
+            <button className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 h-10 px-5 rounded-md ml-auto text-sm md:text-base" type="button">
+                Next
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right -mr-1">
+                    <path d="m9 18 6-6-6-6"></path>
+                </svg>
+            </button>
+        </div>
     </div>
 );
 
 export default function LyricChangerPage() {
-    const [activeTab, setActiveTab] = useState<'search' | 'manual'>('search');
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [currentStep, setCurrentStep] = useState(1);
 
     const steps = [
@@ -358,31 +358,52 @@ export default function LyricChangerPage() {
 
                         {/* Tabs */}
                         <div className="flex-1">
-                            <div className="h-12 my-2 -mb-3 grid w-full grid-cols-2 gap-2 rounded-full p-0
-                            items-center justify-center text-muted-foreground bg-transparent
-                            dark:bg-foundation-secondary"
-                                role="tablist"
-                            >
-                                <Tab
-                                    id="search"
-                                    label="Quick Search"
-                                    icon={<Search className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />}
-                                    isActive={activeTab === 'search'}
-                                    onClick={() => setActiveTab('search')}
-                                />
-                                <Tab
-                                    id="manual"
-                                    label="Manual Entry"
-                                    icon={<Clock className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />}
-                                    isActive={activeTab === 'manual'}
-                                    onClick={() => setActiveTab('manual')}
-                                />
-                            </div>
+                            <Tabs.Root defaultValue="search" className="flex flex-col flex-1">
+                                <Tabs.List className="h-12 my-2 -mb-3 grid w-full grid-cols-2 gap-2 rounded-full p-0
+                                    items-center justify-center text-muted-foreground bg-transparent
+                                    dark:bg-foundation-secondary">
+                                    <Tabs.Trigger
+                                        value="search"
+                                        className="inline-flex h-11 items-center justify-center rounded-full px-3 py-1.5 
+                                            font-medium ring-offset-foundation transition-all focus-visible:outline-none 
+                                            focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none 
+                                            disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:font-semibold 
+                                            data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-muted 
+                                            bg-primary/10 text-xs md:text-sm text-white hover:bg-primary/15 hover:ring 
+                                            hover:ring-secondary/20 data-[state=active]:hover:ring-primary/50 whitespace-nowrap"
+                                    >
+                                        <Search className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />
+                                        Quick Search
+                                    </Tabs.Trigger>
+                                    <Tabs.Trigger
+                                        value="manual"
+                                        className="inline-flex h-11 items-center justify-center rounded-full px-3 py-1.5 
+                                            font-medium ring-offset-foundation transition-all focus-visible:outline-none 
+                                            focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none 
+                                            disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:font-semibold 
+                                            data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-muted 
+                                            bg-primary/10 text-xs md:text-sm text-white hover:bg-primary/15 hover:ring 
+                                            hover:ring-secondary/20 data-[state=active]:hover:ring-primary/50 whitespace-nowrap"
+                                    >
+                                        <Clock className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />
+                                        Manual Entry
+                                    </Tabs.Trigger>
+                                </Tabs.List>
 
-                            {/* Tab Panels */}
-                            <div role="tabpanel" aria-labelledby={`tab-${activeTab}`} id={`tabpanel-${activeTab}`}>
-                                {activeTab === 'search' ? <SearchPanel /> : <ManualEntryPanel />}
-                            </div>
+                                <Tabs.Content
+                                    value="search"
+                                    className="ring-offset-foundation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 data-[state=inactive]:hidden"
+                                >
+                                    <SearchPanel />
+                                </Tabs.Content>
+
+                                <Tabs.Content
+                                    value="manual"
+                                    className="ring-offset-foundation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 data-[state=inactive]:hidden"
+                                >
+                                    <ManualEntryPanel />
+                                </Tabs.Content>
+                            </Tabs.Root>
                         </div>
                     </div>
                 </section>
