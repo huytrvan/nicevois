@@ -3,11 +3,13 @@
 
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { Search, Clock, X } from 'lucide-react';
+import { Search, Clock, X, Link, ChevronRight } from 'lucide-react';
 import React from "react";
 import { useRouter } from 'next/navigation';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as ScrollArea from '@radix-ui/react-scroll-area';
+import * as Form from '@radix-ui/react-form';
+import { Toaster, toast } from 'sonner';
 
 // Types
 type StepProps = {
@@ -20,6 +22,11 @@ type Song = {
     id: string;
     title: string;
     artist: string;
+}
+
+type ManualEntryFields = {
+    songUrl: string;
+    lyrics: string;
 }
 
 // Components
@@ -185,6 +192,10 @@ const SearchPanel = () => {
         } catch (error) {
             console.error("Error searching Genius API:", error);
             setSearchResults([]);
+            // Show error toast
+            toast.error('Error searching for songs', {
+                description: 'Please try again later',
+            });
         } finally {
             setIsLoading(false);
         }
@@ -201,9 +212,18 @@ const SearchPanel = () => {
     const handleSelectSong = (song: Song) => {
         setSelectedSong(song);
         setShowResults(false);
+    };
+
+    const handleNext = () => {
+        if (!selectedSong) {
+            toast.error('Invalid selection', {
+                description: 'Please select a song first',
+            });
+            return;
+        }
 
         // Navigate to the modify page with query parameters
-        router.push(`/modify?id=${song.id}&title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
+        router.push(`/modify?id=${selectedSong.id}&title=${encodeURIComponent(selectedSong.title)}&artist=${encodeURIComponent(selectedSong.artist)}`);
     };
 
     return (
@@ -212,34 +232,39 @@ const SearchPanel = () => {
                 Search for your song below. Once selected, it may take a few seconds to load the lyrics.
             </p>
 
-            <form onSubmit={(e) => e.preventDefault()}>
-                <fieldset className="mb-3.5 flex flex-col gap-0.5 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-400" />
-                    <input
-                        className="flex w-full rounded-md border border-component-input
-                        h-10 md:h-12 pl-10 pr-8 text-sm md:text-base text-primary
-                        bg-foundation px-3 py-1 shadow-sm shadow-black/10 transition-colors text-gray-900
-                        dark:bg-foundation-secondary dark:text-white dark:placeholder:text-muted/75
-                        focus-visible:outline-none focus-visible:ring focus-visible:ring-secondary/50"
-                        type="text"
-                        placeholder="Search for a Song..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    {isLoading && <LoadingIndicator />}
-                    {searchQuery && !isLoading && (
-                        <button
-                            className="absolute right-3 top-1/2 -translate-y-1/2"
-                            onClick={() => {
-                                setSearchQuery('');
-                                setShowResults(false);
-                            }}
-                        >
-                            <X className="size-4 md:size-5 text-gray-400" />
-                        </button>
-                    )}
-                </fieldset>
-            </form>
+            <Form.Root className="space-y-6">
+                <Form.Field name="search">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-400" />
+                        <Form.Control asChild>
+                            <input
+                                className="flex w-full rounded-md border border-component-input
+                                h-10 md:h-12 pl-10 pr-8 text-sm md:text-base text-primary
+                                bg-foundation px-3 py-1 shadow-sm shadow-black/10 transition-colors text-gray-900
+                                dark:bg-foundation-secondary dark:text-white dark:placeholder:text-muted/75
+                                focus-visible:outline-none focus-visible:ring focus-visible:ring-secondary/50"
+                                type="text"
+                                placeholder="Search for a Song..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </Form.Control>
+                        {isLoading && <LoadingIndicator />}
+                        {searchQuery && !isLoading && (
+                            <button
+                                className="absolute right-3 top-1/2 -translate-y-1/2"
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setShowResults(false);
+                                }}
+                                type="button"
+                            >
+                                <X className="size-4 md:size-5 text-gray-400" />
+                            </button>
+                        )}
+                    </div>
+                </Form.Field>
+            </Form.Root>
 
             {showResults ? (
                 <SearchResults
@@ -257,53 +282,185 @@ const SearchPanel = () => {
                             {selectedSong.artist}
                         </p>
                     </div>
-                    <p className="text-sm text-white font-roboto">
-                        Loading lyrics...
-                    </p>
                 </div>
             ) : (
                 <EmptyState />
+            )}
+
+            {selectedSong && (
+                <div className="flex flex-row py-4">
+                    <button
+                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal 
+                            transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none 
+                            disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none 
+                            [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground 
+                            hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 
+                            active:bg-primary/75 active:ring-0 h-10 px-5 rounded-md ml-auto text-sm md:text-base"
+                        type="button"
+                        onClick={handleNext}
+                    >
+                        Next
+                        <ChevronRight className="-mr-1" />
+                    </button>
+                </div>
             )}
         </div>
     );
 };
 
-const ManualEntryPanel = () => (
-    <div className="py-6 mt-4 flex flex-1 flex-col gap-4">
-        <form className="flex flex-col gap-4">
-            <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-sm md:text-base text-white">
-                Please add the URL of the original song. <a className="font-semibold text-white underline" href="https://youtube.com/" target="_blank">Search YouTube</a> or use a cloud storage link.
-            </p>
+// Also update the ManualEntryPanel component:
+const ManualEntryPanel = () => {
+    const router = useRouter();
+    const [formValues, setFormValues] = useState<ManualEntryFields>({
+        songUrl: '',
+        lyrics: ''
+    });
+    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-            <fieldset className="mb-3.5 flex flex-col gap-0.5 last:mb-0 relative">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-link absolute left-3 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-400">
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                </svg>
-                <input className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-1 shadow-sm shadow-black/10 transition-colors file:mr-1.5 file:mt-1.5 file:cursor-pointer file:border-0 file:bg-transparent file:p-0 file:text-sm file:font-medium file:text-foundation-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-secondary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary dark:text-white dark:placeholder:text-muted/75 h-10 md:h-12 pl-10 text-sm md:text-base text-primary" placeholder="https://..." type="text" value="" />
-            </fieldset>
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormValues(prev => ({
+            ...prev,
+            [name]: value
+        }));
 
-            <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-sm md:text-base text-white">
-                Please add the lyrics from the original song. <a className="font-semibold text-white underline" href="https://songmeanings.com/" target="_blank">Search for Lyrics</a>
-            </p>
+        // Clear error when user starts typing
+        if (formErrors[name]) {
+            setFormErrors(prev => ({
+                ...prev,
+                [name]: ''
+            }));
+        }
+    };
 
-            <fieldset className="mb-3.5 flex flex-col gap-0.5 last:mb-0 relative">
-                <textarea className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary dark:text-white text-sm md:text-base text-primary min-h-[200px] md:min-h-[300px] resize-y" placeholder="Paste the original lyrics here..." rows="10"></textarea>
-            </fieldset>
-        </form>
+    const validateForm = () => {
+        const errors: Record<string, string> = {};
+        let isValid = true;
 
-        <div className="flex flex-row py-4">
-            <button className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 h-10 px-5 rounded-md ml-auto text-sm md:text-base" type="button">
-                Next
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right -mr-1">
-                    <path d="m9 18 6-6-6-6"></path>
-                </svg>
-            </button>
+        // Validate URL
+        if (!formValues.songUrl.trim()) {
+            errors.songUrl = 'A valid URL to the original song/ lyrics is required';
+            isValid = false;
+        } else if (!formValues.songUrl.startsWith('http')) {
+            errors.songUrl = 'Please enter a valid URL to original song/ lyrics, starting with http:// or https://';
+            isValid = false;
+        }
+
+        // Validate lyrics
+        if (!formValues.lyrics.trim()) {
+            errors.lyrics = 'Lyrics are required';
+            isValid = false;
+        } else if (formValues.lyrics.trim().length < 50) {
+            errors.lyrics = 'Your lyrics is too short, at least 50 characters is required.';
+            isValid = false;
+        }
+
+        setFormErrors(errors);
+        return isValid;
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (validateForm()) {
+            // Store lyrics in localStorage to avoid URL length limitations
+            localStorage.setItem('manualEntryLyrics', formValues.lyrics);
+
+            // Navigate to next step with just the URL and a flag
+            router.push(`/modify?url=${encodeURIComponent(formValues.songUrl)}&manualEntry=true`);
+        } else {
+            // Show toast with first error
+            const firstError = Object.values(formErrors)[0];
+            toast.error('Invalid input', {
+                description: firstError || 'Please fix the errors in the form',
+            });
+        }
+    };
+
+    return (
+        <div className="py-6 mt-4 flex flex-1 flex-col gap-4">
+            <Form.Root className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-sm md:text-base text-white">
+                    Please add the URL of the original song. <a className="font-semibold text-white underline" href="https://youtube.com/" target="_blank">Search YouTube</a> or use a cloud storage link.
+                </p>
+
+                <Form.Field className="mb-3.5 flex flex-col gap-0.5 last:mb-0 relative" name="songUrl">
+                    <div className="relative">
+                        <Link className="absolute left-3 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-400" />
+                        <Form.Control asChild>
+                            <input
+                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-1 
+                                    shadow-sm shadow-black/10 transition-colors file:mr-1.5 file:mt-1.5 file:cursor-pointer 
+                                    file:border-0 file:bg-transparent file:p-0 file:text-sm file:font-medium 
+                                    file:text-foundation-foreground placeholder:text-muted focus-visible:outline-none 
+                                    focus-visible:ring focus-visible:ring-secondary/50 disabled:cursor-not-allowed 
+                                    disabled:opacity-50 dark:bg-foundation-secondary dark:text-white 
+                                    dark:placeholder:text-muted/75 h-10 md:h-12 pl-10 text-sm md:text-base text-primary"
+                                placeholder="https://..."
+                                type="text"
+                                name="songUrl"
+                                value={formValues.songUrl}
+                                onChange={handleInputChange}
+                            />
+                        </Form.Control>
+                    </div>
+                    {formErrors.songUrl && (
+                        <Form.Message className="text-sm text-red-500 mt-1">
+                            {formErrors.songUrl}
+                        </Form.Message>
+                    )}
+                </Form.Field>
+
+                <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-sm md:text-base text-white">
+                    Please add the lyrics from the original song. <a className="font-semibold text-white underline" href="https://songmeanings.com/" target="_blank">Search for Lyrics</a>
+                </p>
+
+                <Form.Field className="mb-3.5 flex flex-col gap-0.5 last:mb-0 relative" name="lyrics">
+                    <Form.Control asChild>
+                        <textarea
+                            className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 
+                                ring-offset-foundation placeholder:text-muted focus-visible:outline-none 
+                                focus-visible:ring focus-visible:ring-primary/50 disabled:cursor-not-allowed 
+                                disabled:opacity-50 dark:bg-foundation-secondary dark:text-white text-sm 
+                                md:text-base text-primary min-h-[200px] md:min-h-[300px] resize-y"
+                            placeholder="Paste the original lyrics here..."
+                            rows={10}
+                            name="lyrics"
+                            value={formValues.lyrics}
+                            onChange={handleInputChange}
+                        />
+                    </Form.Control>
+                    {formErrors.lyrics && (
+                        <Form.Message className="text-sm text-red-500 mt-1">
+                            {formErrors.lyrics}
+                        </Form.Message>
+                    )}
+                </Form.Field>
+
+                <div className="flex flex-row py-4">
+                    <Form.Submit asChild>
+                        <button
+                            className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal 
+                                transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none 
+                                disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none 
+                                [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground 
+                                hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 
+                                active:bg-primary/75 active:ring-0 h-10 px-5 rounded-md ml-auto text-sm md:text-base"
+                            type="submit"
+                        >
+                            Next
+                            <ChevronRight className="-mr-1" />
+                        </button>
+                    </Form.Submit>
+                </div>
+            </Form.Root>
         </div>
-    </div>
-);
+    );
+};
 
+// Finally, add the Toaster component to your main component:
 export default function LyricChangerPage() {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [currentStep, setCurrentStep] = useState(1);
 
     const steps = [
@@ -315,7 +472,14 @@ export default function LyricChangerPage() {
 
     return (
         <main className="min-h-0 w-full">
-            <div className="w-full" style={{ minHeight: '100%' }}>
+            <div className="w-full min-h-full group toaster">
+                <Toaster
+                    position="top-center"
+                    toastOptions={{
+                        className: "border shadow-lg rounded-lg bg-destructive text-white border-destructive-foreground"
+                    }}
+                />
+                {/* Rest of your component remains the same */}
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-4 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
                     {/* Header/Nav */}
                     <nav className="w-full bg-transparent px-4 pb-4">

@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
         }
 
         const data: GeniusResponse = await response.json();
-        
+
         // Transform the response to match our Song type
         const songs: Song[] = data.response.hits.map((hit) => ({
             id: hit.result.id.toString(),
