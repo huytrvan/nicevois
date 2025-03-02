@@ -190,6 +190,7 @@ export default function ModifyLyricsPage() {
                     <nav className="w-full bg-transparent px-4 pb-4">
                         <div className="container mx-auto flex justify-end">
                             <SignInToSaveButton />
+                        </div>
                     </nav>
 
                     {/* Step Indicators as Tabs */}

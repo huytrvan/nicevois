@@ -10,6 +10,7 @@ import * as Tabs from '@radix-ui/react-tabs';
 import * as ScrollArea from '@radix-ui/react-scroll-area';
 import * as Form from '@radix-ui/react-form';
 import { Toaster, toast } from 'sonner';
+import SignInToSaveButton from "@/components/SignInToSaveButton";
 
 // Types
 type StepProps = {
@@ -484,14 +485,7 @@ export default function LyricChangerPage() {
                     {/* Header/Nav */}
                     <nav className="w-full bg-transparent px-4 pb-4">
                         <div className="container mx-auto flex justify-end">
-                            <button
-                                className="h-10 px-4 py-2 bg-primary hover:bg-primary/90 text-neutral-50
-                                inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md
-                                text-sm font-medium transition-colors focus-visible:outline-none"
-                                type="button"
-                            >
-                                Sign In to Save Lyrics
-                            </button>
+                            <SignInToSaveButton />
                         </div>
                     </nav>
 
