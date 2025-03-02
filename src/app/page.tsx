@@ -223,8 +223,8 @@ const SearchPanel = () => {
             return;
         }
 
-        // Navigate to the modify page with query parameters
-        router.push(`/modify?id=${selectedSong.id}&title=${encodeURIComponent(selectedSong.title)}&artist=${encodeURIComponent(selectedSong.artist)}`);
+        // Navigate to the "change-lyrics" page with query parameters
+        router.push(`/change-lyrics?id=${selectedSong.id}&title=${encodeURIComponent(selectedSong.title)}&artist=${encodeURIComponent(selectedSong.artist)}`);
     };
 
     return (
@@ -368,7 +368,7 @@ const ManualEntryPanel = () => {
             localStorage.setItem('manualEntryLyrics', formValues.lyrics);
 
             // Navigate to next step with just the URL and a flag
-            router.push(`/modify?url=${encodeURIComponent(formValues.songUrl)}&manualEntry=true`);
+            router.push(`/change-lyrics?url=${encodeURIComponent(formValues.songUrl)}&manualEntry=true`);
         } else {
             // Show toast with first error
             const firstError = Object.values(formErrors)[0];
@@ -465,10 +465,9 @@ export default function LyricChangerPage() {
     const [currentStep, setCurrentStep] = useState(1);
 
     const steps = [
-        { step: 1, label: "Original" },
-        { step: 2, label: "Your Ideas" },
-        { step: 3, label: "Review" },
-        { step: 4, label: "Add-Ons" }
+        { step: 1, label: "Choose A Song" },
+        { step: 2, label: "Change The Lyrics" },
+        { step: 3, label: "Review & Check-out" },
     ];
 
     return (
