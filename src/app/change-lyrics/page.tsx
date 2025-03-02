@@ -100,14 +100,21 @@ function calculateWordChanges(original: string, modified: string): WordChange[] 
     return wordChanges;
 }
 
-function generateLyricsData(originalText: string): LyricLine[] {
-    return originalText.split('\n').map((line, index) => ({
-        id: index + 1,
-        original: line,
-        modified: line,
-        wordChanges: calculateWordChanges(line, line)
-    }));
+function generateLyricsData(text: string): LyricLine[] {
+    // Split by newlines and filter out empty lines
+    const lines = text.split('\n')
+        .filter(line => line.trim().length > 0)
+        .map((line, index) => ({
+            id: index,
+            text: line,
+            original: line,
+            modified: line,
+            wordChanges: [], // Process words as needed
+        }));
+
+    return lines;
 }
+
 
 export default function ChangeLyricsPage() {
     // Get URL parameters
@@ -159,7 +166,7 @@ export default function ChangeLyricsPage() {
                 setFormErrors(prev => ({ ...prev, general: 'Error loading lyrics. Please try again.' }));
             }
         }
-    }, [isManualEntry]); // Remove isLoading and originalLyricsText from dependencies
+    }, [isManualEntry]);
 
     // Fetch lyrics from API if songId is available
     useEffect(() => {
@@ -230,10 +237,7 @@ export default function ChangeLyricsPage() {
         return () => {
             isMounted = false;
         };
-    }, [songId, songUrl, isManualEntry, router]); // Removed originalLyricsText and isLoading
-
-
-    // Redirect if original lyrics are empty
+    }, [songId, songUrl, isManualEntry, router]);
 
     const handleLyricChange = (id: number, newText: string) => {
         setLyrics(prevLyrics => {
@@ -246,15 +250,23 @@ export default function ChangeLyricsPage() {
                     // Create a marked-up version of the modified text
                     let markedText = normalizedText;
 
-                    // Split the modified text into words to accurately insert deletion symbols
+                    // Split the modified text into words, properly handling spaces
                     const modifiedWords = normalizedText.split(' ');
 
-                    wordChanges.forEach(change => {
+                    // Process word changes, starting from the end to avoid index issues
+                    const sortedChanges = [...wordChanges].sort((a, b) =>
+                        (b.originalIndex ?? 0) - (a.originalIndex ?? 0)
+                    );
+
+                    sortedChanges.forEach(change => {
                         if (change.hasChanged) {
                             if (change.newWord) {
-                                // Word was replaced - wrap in red span
-                                markedText = markedText.replace(
-                                    new RegExp(`\b${change.newWord}\b`, 'g'),
+                                // Use proper word boundary in regex
+                                const safeWord = change.newWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape regex special chars
+                                const wordRegex = new RegExp(`\\b${safeWord}\\b`, 'g');
+
+                                // Only replace the exact word (not partial matches within other words)
+                                markedText = markedText.replace(wordRegex,
                                     `<span class="text-red-600">${change.newWord}</span>`
                                 );
                             } else if (change.originalWord && change.originalIndex !== undefined) {
@@ -481,7 +493,7 @@ export default function ChangeLyricsPage() {
                             {/* Lyrics editor */}
                             {!isLoading && (
                                 <Form.Root className="flex flex-1 flex-col gap-4 pb-4" onSubmit={handleSubmit}>
-                                    <div className="mt-2 max-h-[calc(100vh-24rem)] md:max-h-[calc(100vh-26rem)] overflow-y-auto">
+                                    <div className="mt-2 overflow-y-auto">
                                         <div className="relative w-full overflow-auto">
                                             <table className="caption-bottom text-sm relative h-10 w-full text-clip rounded-md">
                                                 <thead className="[&_tr]:border-b sticky top-0 z-50 h-10 w-full rounded-t-md border-b-2 bg-gray-50">
