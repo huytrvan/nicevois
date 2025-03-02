@@ -473,7 +473,8 @@ export default function LyricChangerPage() {
                             marginTop: "7rem",
                             padding: "16px",
                             color: "oklch(0.396 0.141 25.723)",
-                            backgroundColor: "oklch(0.971 0.013 17.38)"
+                            backgroundColor: "oklch(0.971 0.013 17.38)",
+                            fontSize: "1.15rem"
                         },
                     }}
                 />

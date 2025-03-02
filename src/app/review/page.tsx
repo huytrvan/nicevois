@@ -219,25 +219,8 @@ function ReviewPageContent() {
 
     const validateForm = () => {
         const errors: Record<string, string> = {};
+        // eslint-disable-next-line prefer-const
         let isValid = true;
-
-        // Validate URL
-        if (!formValues.songUrl.trim()) {
-            errors.songUrl = 'A valid URL to the original song/lyrics is required';
-            isValid = false;
-        } else if (!formValues.songUrl.startsWith('http')) {
-            errors.songUrl = 'Please enter a valid URL starting with http:// or https://';
-            isValid = false;
-        }
-
-        // Validate lyrics
-        if (!formValues.lyrics.trim()) {
-            errors.lyrics = 'Lyrics are required';
-            isValid = false;
-        } else if (formValues.lyrics.trim().length < 50) {
-            errors.lyrics = 'Your lyrics are too short, at least 50 characters are required.';
-            isValid = false;
-        }
 
         setFormErrors(errors);
         return isValid;
@@ -343,7 +326,8 @@ function ReviewPageContent() {
                             marginTop: "7rem",
                             padding: "16px",
                             color: "oklch(0.396 0.141 25.723)",
-                            backgroundColor: "oklch(0.971 0.013 17.38)"
+                            backgroundColor: "oklch(0.971 0.013 17.38)",
+                            fontSize: "1.15rem"
                         },
                     }}
                 />
