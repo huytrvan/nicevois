@@ -527,7 +527,7 @@ function ChangeLyricsPageContent() {
                             }
                         }}
                     >
-                        <Tabs.List className="flex items-center gap-2">
+                        <Tabs.List className="flex items-center gap-2 pointer-events-none">
                             {steps.map((step, index) => (
                                 <React.Fragment key={step.step}>
                                     <Tabs.Trigger value={`step-${step.step}`} asChild>

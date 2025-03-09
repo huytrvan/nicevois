@@ -454,7 +454,7 @@ export default function LyricChangerPage() {
                     </nav>
 
                     {/* Step Indicators */}
-                    <div className="flex flex-col space-y-4 md:space-y-6">
+                    <div className="flex flex-col space-y-4 md:space-y-6 pointer-events-none">
                         <section className="flex items-center gap-2">
                             {steps.map((step, index) => (
                                 <React.Fragment key={step.step}>
