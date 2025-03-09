@@ -12,15 +12,22 @@ import SignInToSaveButton from "@/components/SignInToSaveButton";
 import { StepIndicator, StepDivider, StepProps } from '@/components/layouts/StepNavigation';
 
 // Types
-type Song = {
-    id: string;
-    title: string;
-    artist: string;
-}
-
 type ManualEntryFields = {
     songUrl: string;
     lyrics: string;
+}
+
+interface Song {
+    id: string;
+    title: string;
+    artist: string;
+    image: string;
+}
+
+interface SearchResultsProps {
+    results: Song[];
+    isLoading: boolean;
+    onSelect: (song: Song) => void;
 }
 
 const InfoCard = () => (
@@ -79,11 +86,7 @@ const LoadingIndicator = () => (
 );
 
 // Search Results component
-const SearchResults = ({ results, isLoading, onSelect }: {
-    results: Song[],
-    isLoading: boolean,
-    onSelect: (song: Song) => void
-}) => {
+const SearchResults = ({ results, isLoading, onSelect }: SearchResultsProps) => {
     if (results.length === 0 && !isLoading) {
         return null;
     }
@@ -91,27 +94,26 @@ const SearchResults = ({ results, isLoading, onSelect }: {
     return (
         <div className="relative overflow-hidden flex-1 w-full rounded-md border bg-white max-h-[calc(100vh-20rem)] md:max-h-[calc(100vh-22rem)] overflow-y-auto">
             <div className="min-w-full">
-                {results.map((song, index) => (
-                    <React.Fragment key={song.id}>
-                        <div className="relative cursor-pointer p-3 md:p-4 hover:bg-gray-200/20 transition-colors border-2 border-spacing-0 -mb-1" onClick={() => onSelect(song)}>
+                {results.map((song: Song) => (
+                    <div key={song.id} className="relative cursor-pointer p-3 md:p-4 hover:bg-gray-200/20 transition-colors border-2 border-spacing-0 -mb-1" onClick={() => onSelect(song)}>
+                        <div className="flex items-center gap-3">
+                            <Image src={song.image} alt={song.title} width={48} height={48} className="w-12 h-12 rounded-md" />
                             <div className="pr-12">
-                                <h5 className="scroll-m-20 font-azbuka tracking-normal text-sm md:text-base text-primary truncate">
+                                <h5 className="font-azbuka text-sm md:text-base text-primary truncate">
                                     {song.title}
                                 </h5>
-                                <p className="scroll-m-20 font-roboto font-normal tracking-wide text-xs md:text-sm text-muted truncate">
+                                <p className="font-roboto text-xs md:text-sm text-muted truncate">
                                     {song.artist}
                                 </p>
                             </div>
                         </div>
-                        {index < results.length - 1 && (
-                            <div data-orientation="horizontal" role="none" className="shrink-0 bg-gray-200 dark:bg-gray-100/5 h-[1.5px] w-full"></div>
-                        )}
-                    </React.Fragment>
+                    </div>
                 ))}
             </div>
         </div>
     );
 };
+
 
 const SearchPanel = () => {
     const router = useRouter();
@@ -229,8 +231,17 @@ const SearchPanel = () => {
                     onSelect={handleSelectSong}
                 />
             ) : selectedSong ? (
-                <div className="flex flex-col gap-3">
-                    <div className="p-4 bg-primary/10 rounded-lg">
+                <div className="p-4 bg-primary/10 rounded-lg flex gap-3 items-center">
+                    <div className="relative w-24 h-24 md:w-32 md:h-32">
+                        <Image
+                            src={selectedSong.image}
+                            alt={selectedSong.title}
+                            fill
+                            className="rounded-md object-cover"
+                            priority // Loads the image faster
+                        />
+                    </div>
+                    <div>
                         <h3 className="text-lg text-white font-azbuka tracking-normal">
                             {selectedSong.title}
                         </h3>
