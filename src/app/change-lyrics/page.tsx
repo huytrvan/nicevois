@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ChevronRight, ListMusic, ArrowRight } from 'lucide-react';
 import React from 'react';
@@ -12,12 +12,13 @@ import { Toaster, toast } from 'sonner';
 import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
 import BackButton from '@/components/BackButton';
 
+// src/app/change-lyrics/page.tsx
 // Type definitions
 type WordChange = {
     originalWord: string;
     newWord: string;
     originalIndex: number;
-    newIndex: number; // Add this property
+    newIndex: number;
     hasChanged: boolean;
 };
 
@@ -25,7 +26,7 @@ type LyricLine = {
     id: number;
     original: string;
     modified: string;
-    markedText?: string; // Optional, since it may not always be present
+    markedText?: string;
     wordChanges: WordChange[];
 };
 
@@ -190,6 +191,8 @@ function ChangeLyricsPageContent() {
     const [currentStep, setCurrentStep] = useState(2);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [error, setError] = useState('');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [originalLyricsText, setOriginalLyricsText] = useState<string>('');
     const [lyrics, setLyrics] = useState<LyricLine[]>([]);
     const [specialRequests, setSpecialRequests] = useState('');
@@ -199,207 +202,221 @@ function ChangeLyricsPageContent() {
     });
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-    // Calculate total word changes and cost
-    const totalWordChanges = lyrics.reduce(
-        (sum, line) => sum + line.wordChanges.filter(w => w.hasChanged).length,
-        0
+    // Constants
+    const BASE_COST = 35;
+    const ADDITIONAL_COST_PER_CHANGE = 5;
+
+    // Calculate total word changes
+    const totalWordChanges = useMemo(() =>
+        lyrics.reduce(
+            (sum, line) => sum + line.wordChanges.filter(w => w.hasChanged).length,
+            0
+        ),
+        [lyrics]
     );
-    const baseCost = 35;
-    const addCost = 5;
-    const [cost, setCost] = useState(baseCost); // Start with base cost of $35
+
+    // Calculate cost
+    const [cost, setCost] = useState(BASE_COST);
 
     // Update cost whenever word changes are modified
     useEffect(() => {
-        let additionalCost = 0;
-
-        if (totalWordChanges > 0) {
-            // First change is free, each additional change after that is $5
-            additionalCost = Math.max(0, totalWordChanges - 1) * addCost;
-        }
-
-        setCost(baseCost + additionalCost);
+        const additionalChanges = Math.max(0, totalWordChanges - 1); // First change is free
+        setCost(BASE_COST + additionalChanges * ADDITIONAL_COST_PER_CHANGE);
     }, [totalWordChanges]);
 
     // Check for manually entered lyrics from localStorage
     useEffect(() => {
-        if (isManualEntry) {
-            try {
-                const storedLyrics = localStorage.getItem('manualEntryLyrics');
-                if (storedLyrics) {
-                    setOriginalLyricsText(storedLyrics);
-                    setLyrics(generateLyricsData(storedLyrics));
-                    setFormValues(prev => ({ ...prev, lyrics: storedLyrics }));
-                    // Clear localStorage after retrieving
-                    localStorage.removeItem('manualEntryLyrics');
-                } else {
-                    // Handle case when localStorage is empty but isManualEntry is true
-                    setFormErrors(prev => ({ ...prev, general: 'No lyrics found. Please try again.' }));
-                }
-            } catch (error) {
-                console.error('Error retrieving lyrics from localStorage:', error);
-                setFormErrors(prev => ({ ...prev, general: 'Error loading lyrics. Please try again.' }));
+        if (!isManualEntry) return;
+
+        try {
+            const storedLyrics = localStorage.getItem('manualEntryLyrics');
+            if (storedLyrics) {
+                setOriginalLyricsText(storedLyrics);
+                setLyrics(generateLyricsData(storedLyrics));
+                setFormValues(prev => ({ ...prev, lyrics: storedLyrics }));
+                // Clear localStorage after retrieving
+                localStorage.removeItem('manualEntryLyrics');
+            } else {
+                setFormErrors(prev => ({
+                    ...prev,
+                    general: 'No lyrics found. Please try again.'
+                }));
             }
+        } catch (error) {
+            console.error('Error retrieving lyrics from localStorage:', error);
+            setFormErrors(prev => ({
+                ...prev,
+                general: 'Error loading lyrics. Please try again.'
+            }));
         }
     }, [isManualEntry]);
 
     // Fetch lyrics from API if songId is available
     useEffect(() => {
+        if (!songId && !isManualEntry) {
+            router.push('/');
+            return;
+        }
+
         let isMounted = true; // For cleanup
 
-        const fetchLyrics = async () => {
-            if (!songId && !songUrl && !isManualEntry) {
-                router.push('/');
-                return;
-            }
-
-            if (songId) {
+        const fetchLyricsById = async (id: string) => {
+            try {
                 setIsLoading(true);
-                try {
-                    const response = await fetch(`/api/genius/lyrics?id=${songId}`);
-                    const data = await response.json();
+                const response = await fetch(`/api/genius/lyrics?id=${id}`);
 
-                    if (!isMounted) return;
-
-                    setIsLoading(false);
-                    if (data.lyrics) {
-                        setOriginalLyricsText(data.lyrics);
-                        setLyrics(generateLyricsData(data.lyrics));
-                        setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
-                    } else {
-                        setFormErrors(prev => ({ ...prev, general: 'Lyrics not found' }));
-                        console.error('Lyrics not found');
-                    }
-                } catch (error) {
-                    if (!isMounted) return;
-
-                    setIsLoading(false);
-                    setFormErrors(prev => ({ ...prev, general: 'Error loading lyrics' }));
-                    console.error('Error fetching lyrics:', error);
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
                 }
-            } else if (songUrl && !isManualEntry) {
-                // If we have a songUrl but no songId and it's not a manual entry,
-                // fetch lyrics from the URL
-                setIsLoading(true);
-                try {
-                    const response = await fetch(`/api/genius/lyrics-by-url?url=${encodeURIComponent(songUrl)}`);
-                    const data = await response.json();
 
-                    if (!isMounted) return;
+                const data = await response.json();
 
-                    setIsLoading(false);
-                    if (data.lyrics) {
-                        setOriginalLyricsText(data.lyrics);
-                        setLyrics(generateLyricsData(data.lyrics));
-                        setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
-                    } else {
-                        setFormErrors(prev => ({ ...prev, general: 'Lyrics not found from URL' }));
-                        console.error('Lyrics not found from URL');
-                    }
-                } catch (error) {
-                    if (!isMounted) return;
+                if (!isMounted) return;
 
-                    setIsLoading(false);
-                    setFormErrors(prev => ({ ...prev, general: 'Error fetching lyrics' }));
-                    console.error('Error fetching lyrics from URL:', error);
+                if (data.lyrics) {
+                    setOriginalLyricsText(data.lyrics);
+                    setLyrics(generateLyricsData(data.lyrics));
+                    setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
+                } else {
+                    setFormErrors(prev => ({ ...prev, general: 'Lyrics not found' }));
+                    console.error('Lyrics not found');
                 }
+            } catch (error) {
+                if (!isMounted) return;
+                setFormErrors(prev => ({
+                    ...prev,
+                    general: `Error loading lyrics: ${error instanceof Error ? error.message : 'Unknown error'}`
+                }));
+                console.error('Error fetching lyrics:', error);
+            } finally {
+                if (isMounted) setIsLoading(false);
             }
         };
 
-        fetchLyrics();
+        if (isManualEntry) {
+            setIsLoading(false);
+            return;
+        }
+
+        if (songId) {
+            fetchLyricsById(songId);
+        }
 
         // Cleanup function
         return () => {
             isMounted = false;
         };
-    }, [songId, songUrl, isManualEntry, router]);
+    }, [songId, isManualEntry, router]);
+
+    useEffect(() => {
+        try {
+            const savedStep = parseInt(localStorage.getItem('currentStep') || '2', 10);
+            setCurrentStep(savedStep);
+
+            const savedLyrics = JSON.parse(localStorage.getItem('lyrics') || '[]');
+            setLyrics(savedLyrics);
+
+            const savedRequests = localStorage.getItem('specialRequests') || '';
+            setSpecialRequests(savedRequests);
+
+            const savedFormValues = JSON.parse(localStorage.getItem('formValues') || '{}');
+            setFormValues(savedFormValues);
+
+            const savedCost = parseFloat(localStorage.getItem('cost') || '35');
+            setCost(savedCost);
+        } catch (error) {
+            console.error('Error restoring state from localStorage:', error);
+        }
+    }, []);
+
+    // Text normalization utility
+    const normalizeText = (text: string) => {
+        return text
+            .replace(/[\n\r]+/g, '')
+            .trim()
+            .replace(/\s+/g, ' ');
+    };
+
+    // Strip HTML and ⌧ symbols
+    const stripHtmlAndSymbols = (text: string) => {
+        const div = document.createElement('div');
+        div.innerHTML = text;
+        const plainText = div.textContent || div.innerText || '';
+        return plainText.replace(/⌧/g, '').replace(/[\n\r]+$/g, '');
+    };
 
     function handleLyricChange(id: number, newText: string) {
         setLyrics(prevLyrics => {
             const updatedLyrics = prevLyrics.map(line => {
-                if (line.id === id) {
-                    const normalizeText = (text: string) => {
-                        return text
-                            .replace(/[\n\r]+/g, '')
-                            .trim()
-                            .replace(/\s+/g, ' ');
-                    };
+                if (line.id !== id) return line;
 
-                    // Strip HTML and ⌧ symbols from newText
-                    const stripHtmlAndSymbols = (text: string) => {
-                        const div = document.createElement('div');
-                        div.innerHTML = text;
-                        const plainText = div.textContent || div.innerText || '';
-                        // Remove all ⌧ symbols
-                        return plainText.replace(/⌧/g, '').replace(/[\n\r]+$/g, '');
-                    };
+                const sanitizedNewText = stripHtmlAndSymbols(newText);
+                const normalizedOriginal = normalizeText(line.original);
+                const normalizedText = normalizeText(sanitizedNewText || '');
+                const normalizedModified = normalizeText(line.modified);
 
-                    const sanitizedNewText = stripHtmlAndSymbols(newText);
-                    const normalizedOriginal = normalizeText(line.original);
-                    const normalizedText = normalizeText(sanitizedNewText || '');
-                    const normalizedModified = normalizeText(line.modified);
-
-                    // If no meaningful change since last modified, preserve state
-                    if (normalizedText === normalizedModified) {
-                        return line;
-                    }
-
-                    const wordChanges = calculateWordChanges(normalizedOriginal, normalizedText);
-
-                    const modifiedWords = normalizedText.split(' ').filter(word => word.length > 0);
-                    const markedWords = [...modifiedWords];
-                    const markedPositions = new Set<number>();
-
-                    // Handle additions and replacements
-                    wordChanges.forEach(change => {
-                        if (change.hasChanged && change.newIndex >= 0 && !markedPositions.has(change.newIndex)) {
-                            if (change.newWord) {
-                                markedWords[change.newIndex] = `<span class="text-red-600">${change.newWord}</span>`;
-                                markedPositions.add(change.newIndex);
-                            }
-                        }
-                    });
-
-                    // Handle deletions
-                    const deletions = wordChanges.filter(
-                        change => change.hasChanged && change.newWord === '' && change.originalWord !== ''
-                    );
-                    const deletionPositions = new Map<number, number>();
-                    deletions.forEach(deletion => {
-                        let insertPos = 0;
-                        for (const change of wordChanges) {
-                            if (change.originalIndex < (deletion.originalIndex ?? 0) && change.newIndex >= 0) {
-                                insertPos = Math.max(insertPos, change.newIndex + 1);
-                            }
-                        }
-                        deletionPositions.set(
-                            insertPos,
-                            (deletionPositions.get(insertPos) || 0) + 1
-                        );
-                    });
-
-                    Array.from(deletionPositions.entries())
-                        .sort((a, b) => b[0] - a[0])
-                        .forEach(([position, count]) => {
-                            const deleteSymbol = `<span class="text-red-600">⌧${count > 1 ? ` (${count})` : ''}</span>`;
-                            if (position <= markedWords.length) {
-                                markedWords.splice(position, 0, deleteSymbol);
-                            } else {
-                                markedWords.push(deleteSymbol);
-                            }
-                        });
-
-                    const markedText = markedWords.join(' ');
-
-                    return {
-                        ...line,
-                        modified: normalizedText, // Store plain text without ⌧
-                        markedText,
-                        wordChanges
-                    };
+                // If no meaningful change since last modified, preserve state
+                if (normalizedText === normalizedModified) {
+                    return line;
                 }
-                return line;
+
+                const wordChanges = calculateWordChanges(normalizedOriginal, normalizedText);
+
+                const modifiedWords = normalizedText.split(' ').filter(word => word.length > 0);
+                const markedWords = [...modifiedWords];
+                const markedPositions = new Set<number>();
+
+                // Handle additions and replacements
+                wordChanges.forEach(change => {
+                    if (change.hasChanged && change.newIndex >= 0 && !markedPositions.has(change.newIndex)) {
+                        if (change.newWord) {
+                            markedWords[change.newIndex] = `<span class="text-red-600">${change.newWord}</span>`;
+                            markedPositions.add(change.newIndex);
+                        }
+                    }
+                });
+
+                // Handle deletions
+                const deletions = wordChanges.filter(
+                    change => change.hasChanged && change.newWord === '' && change.originalWord !== ''
+                );
+                const deletionPositions = new Map<number, number>();
+
+                deletions.forEach(deletion => {
+                    let insertPos = 0;
+                    for (const change of wordChanges) {
+                        if (change.originalIndex < (deletion.originalIndex ?? 0) && change.newIndex >= 0) {
+                            insertPos = Math.max(insertPos, change.newIndex + 1);
+                        }
+                    }
+                    deletionPositions.set(
+                        insertPos,
+                        (deletionPositions.get(insertPos) || 0) + 1
+                    );
+                });
+
+                Array.from(deletionPositions.entries())
+                    .sort((a, b) => b[0] - a[0])
+                    .forEach(([position, count]) => {
+                        const deleteSymbol = `<span class="text-red-600">⌧${count > 1 ? ` (${count})` : ''}</span>`;
+                        if (position <= markedWords.length) {
+                            markedWords.splice(position, 0, deleteSymbol);
+                        } else {
+                            markedWords.push(deleteSymbol);
+                        }
+                    });
+
+                const markedText = markedWords.join(' ');
+
+                return {
+                    ...line,
+                    modified: normalizedText, // Store plain text without ⌧
+                    markedText,
+                    wordChanges
+                };
             });
 
+            // Update form values with joined lyrics
             setFormValues(prev => ({
                 ...prev,
                 lyrics: updatedLyrics.map(line => line.modified).join('\n')
@@ -408,6 +425,7 @@ function ChangeLyricsPageContent() {
             return updatedLyrics;
         });
     }
+
     const validateForm = () => {
         const errors: Record<string, string> = {};
         let isValid = true;
@@ -425,35 +443,63 @@ function ChangeLyricsPageContent() {
         return isValid;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const createShopifyCart = async () => {
+        setIsLoading(true);
+        setError('');
 
-        // Check if at least one lyric has been modified
-        const hasChanges = lyrics.some((line) => line.modified !== line.original);
+        try {
+            const sessionId = localStorage.getItem('sessionId') ||
+                Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('sessionId', sessionId);
 
-        if (!hasChanges) {
-            toast.error('No changes made', {
-                description: 'Please modify at least one word before proceeding.',
+            const orderData = {
+                sessionId,
+                originalLyrics: lyrics.map(l => l.original).join('\n'),
+                modifiedLyrics: lyrics.map(l => l.modified).join('\n'),
+                wordChanges: lyrics.flatMap(line =>
+                    line.wordChanges
+                        .filter(w => w.hasChanged)
+                        .map(w => `${w.originalWord} → ${w.newWord}`)
+                ),
+                cost,
+                specialRequests,
+                songTitle: songTitle || 'Not specified',
+                songArtist: songArtist || 'Not specified',
+                email: localStorage.getItem('userEmail')
+            };
+
+            const response = await fetch('/api/shopify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
             });
-            return;
-        }
 
-        if (validateForm()) {
-            // Store lyrics in localStorage to avoid URL length limitations
-            localStorage.setItem('manualEntryLyrics', formValues.lyrics);
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.userMessage || 'Failed to create cart');
+            }
 
-            // Navigate to the checkout step
-            router.push(`/review`);
-        } else {
-            // Show toast with the first error
-            const firstError = Object.values(formErrors)[0];
-            toast.error('Invalid input', {
-                description: firstError || 'Please fix the errors in the form',
+            localStorage.setItem('cartId', result.data.cartId);
+            if (result.data.checkoutUrl) {
+                window.location.href = result.data.checkoutUrl;
+            } else {
+                router.push('/review');
+            }
+        } catch (err) {
+            console.error('Error creating Shopify cart:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Something went wrong';
+            setError(errorMessage);
+            toast.error('Error', {
+                description: err instanceof Error ? err.message : 'Failed to process order'
             });
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleNextStep = () => {
+    const handleNextStep = async (e: React.FormEvent) => {
+        e.preventDefault();
+
         // Check if at least one lyric has been modified
         const hasChanges = lyrics.some((line) => line.modified !== line.original);
 
@@ -464,19 +510,28 @@ function ChangeLyricsPageContent() {
             return;
         }
 
-        // Use the existing validateForm function
         if (validateForm()) {
-            if (currentStep < 4) {
-                setCurrentStep(currentStep + 1);
+            try {
+                await createShopifyCart(); // Await the cart creation
 
-                // Store lyrics in localStorage to avoid URL length limitations
-                localStorage.setItem('manualEntryLyrics', formValues.lyrics);
+                if (currentStep < 4) {
+                    const nextStep = currentStep + 1;
+                    setCurrentStep(nextStep);
 
-                // Navigate to the checkout step
-                router.push(`/review`);
+                    localStorage.setItem('currentStep', nextStep.toString());
+                    localStorage.setItem('lyrics', JSON.stringify(lyrics));
+                    localStorage.setItem('specialRequests', specialRequests);
+                    localStorage.setItem('formValues', JSON.stringify(formValues));
+                    localStorage.setItem('cost', cost.toString());
+                    router.push("/review");
+                }
+            } catch (err) {
+                console.error('Error during next step:', err);
+                toast.error('Error', {
+                    description: 'Failed to create cart. Please try again.',
+                });
             }
         } else {
-            // Show toast with the first error
             const firstError = Object.values(formErrors)[0];
             toast.error('Invalid input', {
                 description: firstError || 'Please fix the errors in the form',
@@ -484,13 +539,14 @@ function ChangeLyricsPageContent() {
         }
     };
 
+
+
     // Define step data
     const steps: StepProps[] = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },
         { step: 2, label: "Change The Lyrics", isActive: currentStep === 2, isComplete: currentStep > 2 },
         { step: 3, label: "Review Order", isActive: currentStep === 3, isComplete: false },
     ];
-
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
@@ -598,13 +654,13 @@ function ChangeLyricsPageContent() {
                                     role="alert"
                                 >
                                     <div className="flex flex-col gap-2">
-                                        <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-inherit text-sm md:text-base md:leading-6">
+                                        <div className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-inherit text-sm md:text-base md:leading-6">
                                             <span className="my-1.5 flex flex-row gap-1">
                                                 <ListMusic className="-mt-0.5 mr-1 size-4 md:size-5 md:mt-0.5" />
                                                 <span>
                                                     <strong>Pricing Summary</strong> <br />
-                                                    <span>Base Fee (First Change): <strong>${baseCost}</strong></span> <br />
-                                                    <span>Additional Changes: <strong>{Math.max(0, totalWordChanges - 1)} × ${addCost} = ${Math.max(0, totalWordChanges - 1) * addCost}</strong></span> <br />
+                                                    <span>Base Fee (First Change): <strong>${BASE_COST}</strong></span> <br />
+                                                    <span>Additional Changes: <strong>{Math.max(0, totalWordChanges - 1)} × ${ADDITIONAL_COST_PER_CHANGE} = ${Math.max(0, totalWordChanges - 1) * ADDITIONAL_COST_PER_CHANGE}</strong></span> <br />
                                                     <div className="text-base md:text-lg border-t border-white/20 mt-2 pt-2">
                                                         <span>
                                                             <strong>Total: ${cost}</strong>
@@ -612,14 +668,14 @@ function ChangeLyricsPageContent() {
                                                     </div>
                                                 </span>
                                             </span>
-                                        </p>
+                                        </div>
                                     </div>
                                 </div>
                             )}
 
                             {/* Lyrics editor */}
                             {!isLoading && (
-                                <Form.Root className="flex flex-1 flex-col gap-4 pb-6" onSubmit={handleSubmit}>
+                                <Form.Root className="flex flex-1 flex-col gap-4 pb-6" onSubmit={handleNextStep}>
                                     <div className="mt-2 overflow-y-auto">
                                         <div className="relative w-full overflow-auto">
                                             <table className="caption-bottom text-sm relative h-10 w-full text-clip rounded-md">

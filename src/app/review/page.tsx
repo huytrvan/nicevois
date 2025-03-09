@@ -1,3 +1,4 @@
+// src/app/review/page.tsx
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
@@ -11,26 +12,8 @@ import { Toaster, toast } from "sonner";
 import { StepIndicator, StepDivider, type StepProps } from "@/components/layouts/StepNavigation";
 import BackButton from "@/components/BackButton";
 
-// Shopify Storefront API Configuration
-const SHOPIFY_STOREFRONT_API_TOKEN = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_API_TOKEN;
-const SHOPIFY_STORE_DOMAIN = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN || "your-store.myshopify.com";
 
 // Type definitions
-type WordChange = {
-    hasChanged: boolean;
-    originalWord: string;
-    newWord?: string;
-    originalIndex?: number;
-};
-
-type LyricLine = {
-    id: number;
-    original: string;
-    modified: string;
-    markedText?: string;
-    wordChanges: WordChange[];
-};
-
 type ProductOption = {
     id: string;
     title: string;
@@ -43,11 +26,40 @@ type ProductOption = {
 
 type Variables = Record<string, unknown>;
 
-interface ShopifyError {
-    message: string;
-    locations?: { line: number; column: number }[];
-    path?: string[];
-    extensions?: Record<string, unknown>;
+// Define specific response types for each GraphQL operation
+interface FetchProductsResponse {
+    nodes: Array<{
+        id: string;
+        price: {
+            amount: string;
+            currencyCode: string;
+        };
+        compareAtPrice?: {
+            amount: string;
+            currencyCode: string;
+        } | null;
+    }>;
+}
+
+interface CreateCartResponse {
+    cartCreate: {
+        cart: {
+            id: string;
+            checkoutUrl: string;
+        };
+        userErrors: Array<{
+            field: string;
+            message: string;
+        }>;
+    };
+}
+
+interface ApiResponse<T> {
+    success: boolean;
+    data?: T;
+    error?: string;
+    details?: string;
+    userMessage?: string;
 }
 
 // GraphQL Queries and Mutations
@@ -84,20 +96,47 @@ const CREATE_CART_MUTATION = `
   }
 `;
 
-async function shopifyFetch(query: string, variables: Variables) {
-    const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/api/2023-10/graphql.json`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_API_TOKEN!,
-        },
-        body: JSON.stringify({ query, variables }),
-    });
-    const json = await response.json();
-    if (json.errors) {
-        throw new Error(json.errors.map((e: ShopifyError) => e.message).join(", "));
+// Enhanced API fetch function with proper typing
+async function shopifyFetch<T>(query: string, variables: Variables, operationName?: string): Promise<T> {
+    try {
+        const response = await fetch('/api/shopify', {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query, variables, operationName }),
+        });
+
+        const json = await response.json() as ApiResponse<T>;
+
+        if (!json.success) {
+            // Show user-friendly error message
+            toast.error('Error', {
+                description: json.userMessage || 'Something went wrong. Please try again later.',
+            });
+
+            // Log detailed error for debugging
+            console.error('API Error:', json.error, json.details);
+
+            throw new Error(json.userMessage || 'API request failed');
+        }
+
+        // Type assertion to ensure data is of type T
+        if (!json.data) {
+            throw new Error('API response missing data');
+        }
+
+        return json.data as T;
+    } catch (error) {
+        // Handle network or JSON parsing errors
+        if (error instanceof Error && error.message !== 'API request failed') {
+            toast.error('Connection Error', {
+                description: 'Unable to connect to our services. Please check your internet connection and try again.',
+            });
+            console.error('Fetch error:', error);
+        }
+        throw error;
     }
-    return json.data;
 }
 
 function OrderReviewPageContent() {
@@ -111,7 +150,8 @@ function OrderReviewPageContent() {
 
     const [currentStep, setCurrentStep] = useState(3);
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [lyrics] = useState<LyricLine[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [loadingMessage, setLoadingMessage] = useState<string>('Loading...');
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [formValues, setFormValues] = useState({
         songUrl: songUrl || "",
@@ -140,17 +180,29 @@ function OrderReviewPageContent() {
         },
     ]);
 
-    // Fetch Standard Delivery price and calculate Rush Delivery price
+    // Fetch product prices with enhanced error handling
     useEffect(() => {
         const fetchProductPrices = async () => {
             setIsLoading(true);
+            setLoadingMessage('Loading product options...');
+
             try {
                 const standardDeliveryId = productOptions.find((p) => p.title === "Standard Delivery")?.id;
                 if (!standardDeliveryId) {
-                    throw new Error("Standard Delivery ID not found");
+                    throw new Error("Standard Delivery option not found");
                 }
 
-                const data = await shopifyFetch(FETCH_PRODUCTS_QUERY, { ids: [standardDeliveryId] });
+                // Specify the exact response type
+                const data = await shopifyFetch<FetchProductsResponse>(
+                    FETCH_PRODUCTS_QUERY,
+                    { ids: [standardDeliveryId] },
+                    'FetchProductPrices'
+                );
+
+                if (!data.nodes || data.nodes.length === 0) {
+                    throw new Error("No product variants returned from API");
+                }
+
                 const variant = data.nodes[0];
 
                 if (!variant) {
@@ -181,16 +233,40 @@ function OrderReviewPageContent() {
                         return option;
                     })
                 );
+
+                // Success message
+                toast.success('Price information loaded successfully');
+
             } catch (error) {
-                toast.error(`Failed to load product prices. \n${String(error).toLowerCase() !== "error" && error ? String(error) : ""}`);
+                // This error is already handled by shopifyFetch, but we can add more context
+                console.error('Price loading error:', error);
+
+                // Set fallback pricing to prevent blocking user experience completely
+                setProductOptions((prevOptions) =>
+                    prevOptions.map((option) => {
+                        if (option.title === "Standard Delivery") {
+                            return { ...option, price: 10.00 };
+                        }
+                        if (option.title === "Rush Delivery") {
+                            return { ...option, price: 15.00 };
+                        }
+                        return option;
+                    })
+                );
+
+                toast.warning('Using estimated prices', {
+                    description: 'We\'re having trouble getting the latest pricing. The prices shown are estimates.',
+                });
             } finally {
                 setIsLoading(false);
+                setLoadingMessage('');
             }
         };
 
         fetchProductPrices();
     }, [productOptions]);
 
+    // Load lyrics with error handling
     useEffect(() => {
         const loadLyrics = async () => {
             try {
@@ -198,17 +274,22 @@ function OrderReviewPageContent() {
                     const savedLyrics = localStorage.getItem("manualEntryLyrics");
                     if (savedLyrics) {
                         setFormValues((prev) => ({ ...prev, lyrics: savedLyrics }));
+                    } else {
+                        toast.warning('No lyrics found', {
+                            description: 'We couldn\'t find the lyrics you entered earlier. You may need to enter them again.',
+                        });
                     }
                 }
             } catch (error) {
-                toast.error(`Failed to load lyrics data. \n${String(error).toLowerCase() !== "error" && error ? String(error) : ""}`);
-
+                console.error('Error loading lyrics:', error);
+                toast.error('Couldn\'t load lyrics', {
+                    description: 'We had trouble accessing your saved lyrics. Please try refreshing the page.',
+                });
             }
         };
 
         loadLyrics();
     }, [isManualEntry]);
-
 
     const toggleProductSelection = (productId: string) => {
         setProductOptions((prevOptions) => {
@@ -238,13 +319,21 @@ function OrderReviewPageContent() {
 
     const validateForm = () => {
         const errors: Record<string, string> = {};
-        const isValid = true;
-        setFormErrors(errors);
-        return isValid;
-    };
 
-    const hasLyricChanges = (): boolean => {
-        return lyrics.some((line) => line.modified !== line.original);
+        // Check if at least one delivery option is selected
+        const hasDeliveryOption = productOptions.some(
+            option => option.type === "delivery" && option.isSelected
+        );
+
+        if (!hasDeliveryOption) {
+            errors.delivery = "Please select a delivery option";
+            toast.error('Missing delivery option', {
+                description: 'Please select a delivery option to continue.',
+            });
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
     };
 
     const prepareCartItems = () => {
@@ -258,39 +347,64 @@ function OrderReviewPageContent() {
 
     const handleCheckout = async () => {
         setIsLoading(true);
+        setLoadingMessage('Preparing your order...');
 
         try {
             // Validate form before proceeding
             if (!validateForm()) {
-                toast.dismiss();
-                toast.error('Invalid input', {
-                    description: 'Please fix the errors in the form before proceeding.',
-                });
                 setIsLoading(false);
+                setLoadingMessage('');
                 return;
             }
 
-            const cartInput = {
-                lines: prepareCartItems(),
-            };
+            const cartItems = prepareCartItems();
 
-            const data = await shopifyFetch(CREATE_CART_MUTATION, { input: cartInput });
-            const checkoutUrl = data.cartCreate.cart.checkoutUrl;
+            if (cartItems.length === 0) {
+                throw new Error('No items selected for checkout');
+            }
 
-            if (!checkoutUrl) {
+            setLoadingMessage('Creating your cart...');
+
+            const cartInput = { lines: cartItems };
+
+            // Specify the exact response type
+            const data = await shopifyFetch<CreateCartResponse>(
+                CREATE_CART_MUTATION,
+                { input: cartInput },
+                'CreateCart'
+            );
+
+            const cart = data.cartCreate?.cart;
+
+            if (!cart || !cart.checkoutUrl) {
                 throw new Error('Failed to create checkout URL');
             }
 
-            window.location.href = checkoutUrl;
+            if (data.cartCreate.userErrors && data.cartCreate.userErrors.length > 0) {
+                const errorMessages = data.cartCreate.userErrors
+                    .map(err => `${err.field}: ${err.message}`)
+                    .join(', ');
+                throw new Error(`Checkout errors: ${errorMessages}`);
+            }
+
+            // Save any necessary data before redirecting
+            localStorage.setItem('lastCheckoutTime', new Date().toISOString());
+
+            // Redirect to Shopify checkout
+            window.location.href = cart.checkoutUrl;
+
         } catch (error) {
-            toast.dismiss();
+            console.error('Checkout error:', error);
+
             toast.error('Checkout failed', {
-                description: `There was a problem processing your order.\nPlease try again.\n${String(error).toLowerCase() !== "error" && error ? String(error) : ""}`,
+                description: 'We couldn\'t process your order. Please try again or contact customer support if the problem persists.',
             });
         } finally {
             setIsLoading(false);
+            setLoadingMessage('');
         }
     };
+
 
     const steps: StepProps[] = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },

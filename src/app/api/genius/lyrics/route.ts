@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 const GENIUS_API_KEY = process.env.GENIUS_API_KEY;
 
 const allowedOrigins = [
-    'http://localhost:3000',  
-    'https://yourproductiondomain.com' 
+    'http://localhost:3000',
+    'https://yourproductiondomain.com'
 ];
 
 // Define a type for mock lyrics
@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
 
         const songData = await songResponse.json();
         const song = songData.response.song;
-        
+
         if (!song) {
             return new NextResponse(
                 JSON.stringify({ error: 'Song not found' }),
