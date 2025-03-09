@@ -181,7 +181,7 @@ const SearchPanel = () => {
         }
 
         // Navigate to the "change-lyrics" page with query parameters
-        router.push(`/change-lyrics?id=${selectedSong.id}&title=${encodeURIComponent(selectedSong.title)}&artist=${encodeURIComponent(selectedSong.artist)}`);
+        router.push(`/change-lyrics?id=${selectedSong.id}&title=${encodeURIComponent(selectedSong.title)}&artist=${encodeURIComponent(selectedSong.artist)}&image=${encodeURIComponent(selectedSong.image)}`);
     };
 
     return (
