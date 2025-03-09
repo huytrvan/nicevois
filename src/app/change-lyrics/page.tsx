@@ -167,7 +167,7 @@ function generateLyricsData(text: string): LyricLine[] {
         .split('\n')
         .filter(line => line.trim().length > 0)
         .map((line, index) => ({
-            id: index,
+            id: index + 1,
             text: line.trim(),
             original: line.trim(),
             modified: line.trim(),
