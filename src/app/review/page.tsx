@@ -1,29 +1,33 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Check, ChevronLeft, ChevronRight, TicketPercent } from 'lucide-react';
-import Link from 'next/link';
-import React from 'react';
-import * as Tabs from '@radix-ui/react-tabs';
-import * as Separator from '@radix-ui/react-separator';
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Check, ChevronRight, TicketPercent } from "lucide-react";
+import React from "react";
+import * as Tabs from "@radix-ui/react-tabs";
+import * as Separator from "@radix-ui/react-separator";
 import SignInToSaveButton from "@/components/SignInToSaveButton";
-import { Toaster, toast } from 'sonner';
-import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
+import { Toaster, toast } from "sonner";
+import { StepIndicator, StepDivider, type StepProps } from "@/components/layouts/StepNavigation";
+import BackButton from "@/components/BackButton";
+
+// Shopify Storefront API Configuration
+const SHOPIFY_STOREFRONT_API_TOKEN = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_API_TOKEN;
+const SHOPIFY_STORE_DOMAIN = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN || "your-store.myshopify.com";
 
 // Type definitions
 type WordChange = {
     hasChanged: boolean;
     originalWord: string;
-    newWord?: string; // Optional, for cases like deletions
-    originalIndex?: number; // Optional, useful for inserting deletion symbols
+    newWord?: string;
+    originalIndex?: number;
 };
 
 type LyricLine = {
     id: number;
     original: string;
     modified: string;
-    markedText?: string; // Optional, since it may not always be present
+    markedText?: string;
     wordChanges: WordChange[];
 };
 
@@ -34,231 +38,260 @@ type ProductOption = {
     price: number;
     originalPrice?: number;
     isSelected: boolean;
-    type: 'delivery' | 'addon';
+    type: "delivery" | "addon";
 };
 
+type Variables = Record<string, unknown>;
+
+interface ShopifyError {
+    message: string;
+    locations?: { line: number; column: number }[];
+    path?: string[];
+    extensions?: Record<string, unknown>;
+}
+
+// GraphQL Queries and Mutations
+const FETCH_PRODUCTS_QUERY = `
+  query fetchProducts($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on ProductVariant {
+        id
+        price {
+          amount
+          currencyCode
+        }
+        compareAtPrice {
+          amount
+          currencyCode
+        }
+      }
+    }
+  }
+`;
+
+const CREATE_CART_MUTATION = `
+  mutation cartCreate($input: CartInput!) {
+    cartCreate(input: $input) {
+      cart {
+        id
+        checkoutUrl
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+async function shopifyFetch(query: string, variables: Variables) {
+    const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/api/2023-10/graphql.json`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_API_TOKEN!,
+        },
+        body: JSON.stringify({ query, variables }),
+    });
+    const json = await response.json();
+    if (json.errors) {
+        throw new Error(json.errors.map((e: ShopifyError) => e.message).join(", "));
+    }
+    return json.data;
+}
 
 function OrderReviewPageContent() {
-    // Get URL parameters
     const searchParams = useSearchParams();
-    const songId = searchParams.get('id');
-    const songTitle = searchParams.get('title');
-    const songArtist = searchParams.get('artist');
-    const songUrl = searchParams.get('url');
-    const isManualEntry = searchParams.get('manualEntry') === 'true';
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const songId = searchParams.get("id");
+    const songTitle = searchParams.get("title");
+    const songArtist = searchParams.get("artist");
+    const songUrl = searchParams.get("url");
+    const isManualEntry = searchParams.get("manualEntry") === "true";
 
-    // State definitions
     const [currentStep, setCurrentStep] = useState(3);
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const lyrics: LyricLine[] = [];
+    const [lyrics] = useState<LyricLine[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [formValues, setFormValues] = useState({
-        songUrl: songUrl || '',
-        lyrics: '',
+        songUrl: songUrl || "",
+        lyrics: "",
     });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-    // Product options with security improvements
     const [productOptions, setProductOptions] = useState<ProductOption[]>([
-        // Delivery options
         {
-            id: "gid://shopify/ProductVariant/50091649270053",
+            id: "gid://shopify/ProductVariant/50091649270053", // Standard Delivery variant ID
             title: "Standard Delivery",
             description: "5 business days",
-            price: 149.95,
-            originalPrice: 60.0,
+            price: 0, // Will be fetched from Shopify
+            originalPrice: undefined,
             isSelected: true,
-            type: 'delivery'
+            type: "delivery",
         },
         {
-            id: "gid://shopify/ProductVariant/50091649302821",
+            id: "gid://shopify/ProductVariant/50091649302821", // Rush Delivery variant ID
             title: "Rush Delivery",
             description: "Rush - 1 business day",
-            price: 199.95,
-            originalPrice: 60.0,
+            price: 0, // Will be calculated as 150% of Standard Delivery
+            originalPrice: undefined,
             isSelected: false,
-            type: 'delivery'
+            type: "delivery",
         },
     ]);
 
-    // Load product data from the server
+    // Fetch Standard Delivery price and calculate Rush Delivery price
     useEffect(() => {
-        // Fetch product data from API instead of relying on URL parameters
-        const fetchProductData = async () => {
+        const fetchProductPrices = async () => {
             setIsLoading(true);
             try {
-                // In a real implementation, you'd fetch this data from your server
-                // const response = await fetch('/api/products');
-                // const data = await response.json();
-                // setProductOptions(data.products);
+                const standardDeliveryId = productOptions.find((p) => p.title === "Standard Delivery")?.id;
+                if (!standardDeliveryId) {
+                    throw new Error("Standard Delivery ID not found");
+                }
 
-                // For now, we're using the initial state
-                setIsLoading(false);
+                const data = await shopifyFetch(FETCH_PRODUCTS_QUERY, { ids: [standardDeliveryId] });
+                const variant = data.nodes[0];
+
+                if (!variant) {
+                    throw new Error("Standard Delivery variant not found");
+                }
+
+                const standardPrice = parseFloat(variant.price.amount);
+                const rushPrice = standardPrice * 1.5;
+
+                setProductOptions((prevOptions) =>
+                    prevOptions.map((option) => {
+                        if (option.title === "Standard Delivery") {
+                            return {
+                                ...option,
+                                price: standardPrice,
+                                originalPrice: variant.compareAtPrice
+                                    ? parseFloat(variant.compareAtPrice.amount)
+                                    : undefined,
+                            };
+                        }
+                        if (option.title === "Rush Delivery") {
+                            return {
+                                ...option,
+                                price: rushPrice,
+                                originalPrice: standardPrice,
+                            };
+                        }
+                        return option;
+                    })
+                );
             } catch (error) {
-                console.error('Failed to fetch product data:', error);
-                toast.error('Failed to load product options');
+                toast.error(`Failed to load product prices. \n${String(error).toLowerCase() !== "error" && error ? String(error) : ""}`);
+            } finally {
                 setIsLoading(false);
             }
         };
 
-        // Load the lyrics information from localStorage or API
+        fetchProductPrices();
+    }, [productOptions]);
+
+    useEffect(() => {
         const loadLyrics = async () => {
             try {
                 if (isManualEntry) {
-                    const savedLyrics = localStorage.getItem('manualEntryLyrics');
+                    const savedLyrics = localStorage.getItem("manualEntryLyrics");
                     if (savedLyrics) {
-                        // Process the lyrics
-                        setFormValues(prev => ({ ...prev, lyrics: savedLyrics }));
-
-                        // For a real implementation, you would parse the lyrics into lines here
-                        // const parsedLines = parseLyrics(savedLyrics);
-                        // setLyrics(parsedLines);
+                        setFormValues((prev) => ({ ...prev, lyrics: savedLyrics }));
                     }
-                } else if (songId) {
-                    // Fetch lyrics data from your API for non-manual entries
-                    // const response = await fetch(`/api/songs/${songId}`);
-                    // const data = await response.json();
-                    // setLyrics(data.lyrics);
-                    // setOriginalLyricsText(data.originalText);
                 }
             } catch (error) {
-                console.error('Failed to load lyrics:', error);
-                toast.error('Failed to load lyrics data');
+                toast.error(`Failed to load lyrics data. \n${String(error).toLowerCase() !== "error" && error ? String(error) : ""}`);
+
             }
         };
 
-        fetchProductData();
         loadLyrics();
-    }, [songId, isManualEntry]);
+    }, [isManualEntry]);
 
-    // Toggle product selection
+
     const toggleProductSelection = (productId: string) => {
-        setProductOptions(prevOptions => {
+        setProductOptions((prevOptions) => {
             const updatedOptions = [...prevOptions];
-            const productIndex = updatedOptions.findIndex(p => p.id === productId);
-
+            const productIndex = updatedOptions.findIndex((p) => p.id === productId);
             if (productIndex === -1) return prevOptions;
 
             const product = updatedOptions[productIndex];
-
-            // If it's a delivery option, deselect all other delivery options first
-            if (product.type === 'delivery') {
+            if (product.type === "delivery") {
                 updatedOptions.forEach((p, i) => {
-                    if (p.type === 'delivery') {
+                    if (p.type === "delivery") {
                         updatedOptions[i] = { ...p, isSelected: false };
                     }
                 });
             }
 
-            // Toggle the selected product
-            updatedOptions[productIndex] = {
-                ...product,
-                isSelected: !product.isSelected
-            };
-
+            updatedOptions[productIndex] = { ...product, isSelected: !product.isSelected };
             return updatedOptions;
         });
     };
 
-    // Calculate total price
     const calculateTotal = (): number => {
         return productOptions
-            .filter(product => product.isSelected)
+            .filter((product) => product.isSelected)
             .reduce((total, product) => total + product.price, 0);
     };
 
     const validateForm = () => {
         const errors: Record<string, string> = {};
-        // eslint-disable-next-line prefer-const
-        let isValid = true;
-
+        const isValid = true;
         setFormErrors(errors);
         return isValid;
     };
 
-    // Check if any lyric has been modified
     const hasLyricChanges = (): boolean => {
         return lyrics.some((line) => line.modified !== line.original);
     };
 
-    // Prepare cart items for Shopify checkout
     const prepareCartItems = () => {
         return productOptions
-            .filter(product => product.isSelected)
-            .map(product => ({
-                id: product.id,
-                quantity: 1
+            .filter((product) => product.isSelected)
+            .map((product) => ({
+                variantId: product.id,
+                quantity: 1,
             }));
     };
 
-    // Handle form submission and checkout
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleCheckout = async () => {
+        setIsLoading(true);
 
-        // Check if at least one lyric has been modified
-        if (!hasLyricChanges() && lyrics.length > 0) {
-            toast.error('No changes made', {
-                description: 'Please modify at least one lyric before proceeding.',
-            });
-            return;
-        }
-
-        if (validateForm()) {
-            setIsLoading(true);
-
-            try {
-                // Store lyrics data securely in your database or session
-                // Instead of just putting it in localStorage which is insecure
-                const lyricsData = {
-                    songId,
-                    songTitle,
-                    songArtist,
-                    songUrl: formValues.songUrl,
-                    lyrics: lyrics.length > 0 ? lyrics : formValues.lyrics,
-                    cartItems: prepareCartItems()
-                };
-
-                // Make a request to your server to create a secure checkout session
-                const response = await fetch('/api/create-checkout', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(lyricsData),
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to create checkout session');
-                }
-
-                const { checkoutUrl } = await response.json();
-
-                // Redirect to the Shopify checkout page
-                window.location.href = checkoutUrl;
-
-            } catch (error) {
-                console.error('Checkout error:', error);
-                toast.error('Checkout failed', {
-                    description: 'There was a problem processing your order. Please try again.',
+        try {
+            // Validate form before proceeding
+            if (!validateForm()) {
+                toast.dismiss();
+                toast.error('Invalid input', {
+                    description: 'Please fix the errors in the form before proceeding.',
                 });
                 setIsLoading(false);
+                return;
             }
-        } else {
-            // Show toast with the first error
-            const firstError = Object.values(formErrors)[0];
-            toast.error('Invalid input', {
-                description: firstError || 'Please fix the errors in the form',
+
+            const cartInput = {
+                lines: prepareCartItems(),
+            };
+
+            const data = await shopifyFetch(CREATE_CART_MUTATION, { input: cartInput });
+            const checkoutUrl = data.cartCreate.cart.checkoutUrl;
+
+            if (!checkoutUrl) {
+                throw new Error('Failed to create checkout URL');
+            }
+
+            window.location.href = checkoutUrl;
+        } catch (error) {
+            toast.dismiss();
+            toast.error('Checkout failed', {
+                description: `There was a problem processing your order.\nPlease try again.\n${String(error).toLowerCase() !== "error" && error ? String(error) : ""}`,
             });
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleNextStep = () => {
-        if (currentStep < 4) {
-            setCurrentStep(currentStep + 1);
-            handleSubmit(new Event('submit') as unknown as React.FormEvent);
-        }
-    };
-
-    // Define step data
     const steps: StepProps[] = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },
         { step: 2, label: "Change The Lyrics", isActive: currentStep === 2, isComplete: currentStep > 2 },
@@ -276,24 +309,22 @@ function OrderReviewPageContent() {
                             padding: "16px",
                             color: "oklch(0.396 0.141 25.723)",
                             backgroundColor: "oklch(0.971 0.013 17.38)",
-                            fontSize: "1.15rem"
+                            fontSize: "1.15rem",
                         },
                     }}
                 />
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-4 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
-                    {/* Header/Nav */}
                     <nav className="w-full bg-transparent px-4 pb-4">
                         <div className="container mx-auto flex justify-end">
                             <SignInToSaveButton />
                         </div>
                     </nav>
 
-                    {/* Step Indicators as Tabs */}
                     <Tabs.Root
                         value={`step-${currentStep}`}
                         className="flex flex-col space-y-4 md:space-y-6"
                         onValueChange={(value) => {
-                            const step = parseInt(value.split('-')[1]);
+                            const step = parseInt(value.split("-")[1]);
                             if (step <= currentStep) {
                                 setCurrentStep(step);
                             }
@@ -313,46 +344,37 @@ function OrderReviewPageContent() {
                                         </div>
                                     </Tabs.Trigger>
                                     {index < steps.length - 1 && (
-                                        <StepDivider isActive={index === 0 || (currentStep > index + 1)} />
+                                        <StepDivider isActive={index === 0 || currentStep > index + 1} />
                                     )}
                                 </React.Fragment>
                             ))}
                         </Tabs.List>
 
-                        {/* Content Section */}
                         <Tabs.Content value={`step-${currentStep}`} className="flex flex-1 flex-col space-y-2" style={{ opacity: 1 }}>
                             <h3 className="scroll-m-20 font-azbuka tracking-normal dark:text-white my-2 text-[22px] md:my-4 md:text-[28px] text-white duration-150 ease-in animate-in fade-in">
                                 Select Delivery Options
                             </h3>
 
-                            {/* Song Title and Artist display */}
                             {(songTitle || songArtist) && (
                                 <div className="p-3 bg-primary/10 rounded-lg mb-2">
                                     {songTitle && (
-                                        <h4 className="text-white font-azbuka text-lg">
-                                            {songTitle}
-                                        </h4>
+                                        <h4 className="text-white font-azbuka text-lg">{songTitle}</h4>
                                     )}
                                     {songArtist && (
-                                        <p className="text-white/80 font-roboto text-sm mt-1">
-                                            by {songArtist}
-                                        </p>
+                                        <p className="text-white/80 font-roboto text-sm mt-1">by {songArtist}</p>
                                     )}
                                 </div>
                             )}
 
-                            {/* Navigation Buttons */}
                             <div className="flex flex-row items-center gap-2 py-0">
-                                {/* Go back with all the state data */}
-                                <Link href="/change-lyrics" className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-[1.5px] bg-white hover:bg-white/95 hover:ring-gray-200/65 focus-visible:ring focus-visible:ring-gray-200/65 active:bg-gray-200 active:ring-0  dark:hover:ring-gray-100/15 dark:focus-visible:ring-gray-100/15 dark:active:bg-gray-100/25 px-5 rounded-md text-sm md:text-base h-10 md:h-12">
-                                    <ChevronLeft className="-ml-1 size-4 md:size-5" /> Back
-                                </Link>
+                                <BackButton href="change-lyrics" />
                                 <button
-                                    onClick={handleNextStep}
+                                    onClick={handleCheckout}
+                                    disabled={isLoading}
                                     className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
                                     type="button"
                                 >
-                                    Checkout <ChevronRight className="-mr-1 size-4 md:size-5" />
+                                    {isLoading ? "Processing..." : "Checkout"} <ChevronRight className="-mr-1 size-4 md:size-5" />
                                 </button>
                             </div>
 
@@ -361,14 +383,12 @@ function OrderReviewPageContent() {
                                 orientation="horizontal"
                             />
 
-                            {/* Loading state */}
                             {isLoading && (
                                 <div className="flex items-center justify-center py-8">
                                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
                                 </div>
                             )}
 
-                            {/* Lyrics cost info */}
                             {!isLoading && (
                                 <div className="relative w-full rounded-lg p-4 dark:border-gray-100/5 bg-primary/80 text-white/80" role="alert">
                                     <div className="flex flex-row gap-2 text-sm md:text-base md:items-center">
@@ -378,15 +398,17 @@ function OrderReviewPageContent() {
                                 </div>
                             )}
 
-                            {/* Lyrics editor */}
                             {!isLoading && (
                                 <div className="flex flex-col space-y-2 overflow-y-auto md:h-auto lg:h-full">
                                     <div className="space-y-2 my-6">
-                                        {/* Delivery Options */}
                                         {productOptions
-                                            .filter(product => product.type === 'delivery')
+                                            .filter((product) => product.type === "delivery")
                                             .map((product) => (
-                                                <label key={product.id} className={`mb-1 scroll-m-20 text-sm font-normal leading-normal tracking-normal peer-disabled:cursor-not-allowed peer-disabled:text-gray-500 peer-disabled:opacity-50 dark:text-white flex cursor-pointer items-center justify-between rounded-lg ${product.isSelected ? 'border-2 border-primary' : 'border'} bg-white p-4 hover:border-primary`}>
+                                                <label
+                                                    key={product.id}
+                                                    className={`mb-1 scroll-m-20 text-sm font-normal leading-normal tracking-normal peer-disabled:cursor-not-allowed peer-disabled:text-gray-500 peer-disabled:opacity-50 dark:text-white flex cursor-pointer items-center justify-between rounded-lg ${product.isSelected ? "border-2 border-primary" : "border"
+                                                        } bg-white p-4 hover:border-primary`}
+                                                >
                                                     <div className="flex items-start gap-2 pr-2">
                                                         <button
                                                             type="button"
@@ -399,7 +421,7 @@ function OrderReviewPageContent() {
                                                             onClick={() => toggleProductSelection(product.id)}
                                                         >
                                                             {product.isSelected && (
-                                                                <span data-state="checked" className="flex items-center justify-center text-current" style={{ pointerEvents: 'none' }}>
+                                                                <span data-state="checked" className="flex items-center justify-center text-current" style={{ pointerEvents: "none" }}>
                                                                     <Check className="size-5" />
                                                                 </span>
                                                             )}
@@ -419,7 +441,6 @@ function OrderReviewPageContent() {
                                             ))}
                                     </div>
 
-                                    {/* Total Price */}
                                     <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border-t bg-primary md:relative md:rounded-md md:bg-primary/80">
                                         <div className="flex items-center justify-between p-4">
                                             <span className="font-medium text-white md:block">
@@ -428,9 +449,10 @@ function OrderReviewPageContent() {
                                             <button
                                                 className="inline-flex items-center justify-center gap-2 font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 h-10 px-5 text-base rounded-md ml-auto whitespace-nowrap md:hidden"
                                                 type="button"
-                                                onClick={handleNextStep}
+                                                onClick={handleCheckout}
+                                                disabled={isLoading}
                                             >
-                                                Checkout <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right ml-1 h-5 w-5"><path d="m9 18 6-6-6-6"></path></svg>
+                                                {isLoading ? "Processing..." : "Checkout"} <ChevronRight />
                                             </button>
                                         </div>
                                     </div>
@@ -444,14 +466,15 @@ function OrderReviewPageContent() {
     );
 }
 
-// Main component that wraps the content with Suspense
 export default function ReviewPage() {
     return (
-        <Suspense fallback={
-            <div className="flex items-center justify-center h-screen">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-            </div>
-        }>
+        <Suspense
+            fallback={
+                <div className="flex items-center justify-center h-screen">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+                </div>
+            }
+        >
             <OrderReviewPageContent />
         </Suspense>
     );

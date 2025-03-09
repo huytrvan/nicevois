@@ -2,8 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, ListMusic, ArrowRight } from 'lucide-react';
-import Link from 'next/link';
+import { ChevronRight, ListMusic, ArrowRight } from 'lucide-react';
 import React from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
@@ -11,6 +10,7 @@ import * as Separator from '@radix-ui/react-separator';
 import SignInToSaveButton from "@/components/SignInToSaveButton";
 import { Toaster, toast } from 'sonner';
 import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
+import BackButton from '@/components/BackButton';
 
 // Type definitions
 type WordChange = {
@@ -390,8 +390,6 @@ function ChangeLyricsPageContent() {
 
                     const markedText = markedWords.join(' ');
 
-                    console.log(`Line ${id} - New Marked Text:`, markedText);
-
                     return {
                         ...line,
                         modified: normalizedText, // Store plain text without ⌧
@@ -435,7 +433,7 @@ function ChangeLyricsPageContent() {
 
         if (!hasChanges) {
             toast.error('No changes made', {
-                description: 'Please modify at least one lyric before proceeding.',
+                description: 'Please modify at least one word before proceeding.',
             });
             return;
         }
@@ -571,9 +569,7 @@ function ChangeLyricsPageContent() {
 
                             {/* Navigation Buttons */}
                             <div className="flex flex-row items-center gap-2 py-0">
-                                <Link href="/" className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-[1.5px] bg-white hover:bg-white/95 hover:ring-gray-200/65 focus-visible:ring focus-visible:ring-gray-200/65 active:bg-gray-200 active:ring-0  dark:hover:ring-gray-100/15 dark:focus-visible:ring-gray-100/15 dark:active:bg-gray-100/25 px-5 rounded-md text-sm md:text-base h-10 md:h-12">
-                                    <ChevronLeft className="-ml-1 size-4 md:size-5" /> Back
-                                </Link>
+                                <BackButton href="/" />
                                 <button
                                     onClick={handleNextStep}
                                     className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
