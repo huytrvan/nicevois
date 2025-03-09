@@ -1,7 +1,8 @@
+// src\app\review\page.tsx
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Check, ChevronRight, TicketPercent } from "lucide-react";
 import React from "react";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -34,28 +35,17 @@ type LyricLine = {
 };
 
 function OrderReviewPageContent() {
-    const searchParams = useSearchParams();
     const router = useRouter();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const songId = searchParams.get("id");
-    const songTitle = searchParams.get("title");
-    const songArtist = searchParams.get("artist");
-    const songUrl = searchParams.get("url");
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const isManualEntry = searchParams.get("manualEntry") === "true";
+    // Retrieve song data from localStorage
+    const songTitle = localStorage.getItem("songTitle") || "";
+    const songArtist = localStorage.getItem("songArtist") || "";
+    const songUrl = localStorage.getItem("songUrl") || "";
 
     const [currentStep, setCurrentStep] = useState(3);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [lyrics, setLyrics] = useState<LyricLine[]>([]);
     const [cost, setCost] = useState(0);
     const [specialRequests, setSpecialRequests] = useState("");
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [formValues, setFormValues] = useState({
-        songUrl: songUrl || "",
-        lyrics: "",
-    });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
     const [productOptions, setProductOptions] = useState<ProductOption[]>([
         {
             id: "delivery-standard",
@@ -82,12 +72,10 @@ function OrderReviewPageContent() {
             const storedLyrics = JSON.parse(localStorage.getItem("lyrics") || "[]");
             const storedCost = parseFloat(localStorage.getItem("cost") || "0");
             const storedSpecialRequests = localStorage.getItem("specialRequests") || "";
-            const storedFormValues = JSON.parse(localStorage.getItem("formValues") || "{}");
 
             setLyrics(storedLyrics);
             setCost(storedCost);
             setSpecialRequests(storedSpecialRequests);
-            setFormValues(storedFormValues);
         } catch (error) {
             console.error("Error loading from localStorage:", error);
             toast.error("Failed to load order data");
@@ -124,19 +112,17 @@ function OrderReviewPageContent() {
     const handleCheckout = async () => {
         setIsLoading(true);
 
-        // Add this as the first code block inside the handleCheckout function
         if (lyrics.filter(line => line.modified !== line.original).length === 0) {
             toast.error("No lyrics changes detected", {
-                description: "You need to modify at least one line of lyrics to place an order."
+                description: "You need to modify at least one line of lyrics to place an order.",
             });
             setIsLoading(false);
             return;
         }
 
-        // Optional: Add additional validation for required fields
         if (!songTitle && !songArtist && !songUrl) {
             toast.error("Missing song information", {
-                description: "Please go back and select a song before checkout."
+                description: "Please go back and select a song before checkout.",
             });
             setIsLoading(false);
             return;
@@ -146,26 +132,31 @@ function OrderReviewPageContent() {
             const sessionId = localStorage.getItem("sessionId") || Math.random().toString(36).substring(2, 15);
             localStorage.setItem("sessionId", sessionId);
 
-            const deliveryType = productOptions.find((p) => p.isSelected)?.title === "Rush Delivery" ? "rush" : "standard";
+            const deliveryType = productOptions.find((p) => p.isSelected && p.type === "delivery")?.id === "delivery-rush" ? "rush" : "standard";
 
-            // Filter and format the lyrics changes for the API
             const lyricsChanges = lyrics
                 .filter(line => line.modified !== line.original)
                 .map(line => ({
                     original: line.original,
-                    modified: line.modified
+                    modified: line.modified,
                 }));
+
+            // Count total words changed
+            const wordChangedCount = lyrics
+                .filter(line => line.modified !== line.original)
+                .reduce((total, line) => {
+                    return total + (line.wordChanges?.length || 0);
+                }, 0);
 
             const orderData = {
                 sessionId,
-                price: calculateTotal(), // Ensure this returns a valid number
-                name: localStorage.getItem("userName") || undefined,
-                email: localStorage.getItem("userEmail") || undefined,
+                price: calculateTotal(),
+                wordChanged: wordChangedCount,
                 songName: songTitle || undefined,
                 artist: songArtist || undefined,
                 songUrl: songUrl || undefined,
                 deliveryType,
-                lyrics: lyricsChanges // Add the required lyrics array
+                lyrics: lyricsChanges,
             };
 
             const response = await fetch("/api/shopify", {
@@ -174,28 +165,33 @@ function OrderReviewPageContent() {
                 body: JSON.stringify(orderData),
             });
 
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.userMessage || "Failed to create cart");
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    // Redirect to Shopify invoice URL
+                    window.location.href = result.data.invoiceUrl;
+                    return;
+                } else {
+                    const userMessage = result.userMessage || "Failed to create order";
+                    toast.error("Checkout error", { description: userMessage });
+                    throw new Error(userMessage);
+                }
+            } else {
+                const errorText = await response.text();
+                const errorMessage = `Error ${response.status}: ${response.statusText}`;
+                toast.error("Server error", { description: errorText || errorMessage });
+                throw new Error(errorMessage);
             }
 
-            localStorage.setItem("cartId", result.data.cartId);
-            if (result.data.checkoutUrl) {
-                window.location.href = result.data.checkoutUrl;
-            } else {
-                toast.error("No checkout URL received");
-            }
         } catch (error) {
             console.error("Checkout error:", error);
             toast.error("Checkout failed", {
-                description: `There was a problem processing your order: ${error instanceof Error ? error.message : String(error)
-                    }`,
+                description: `There was a problem processing your order: ${error instanceof Error ? error.message : String(error)}`,
             });
         } finally {
             setIsLoading(false);
         }
     };
-
 
     const steps: StepProps[] = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },
@@ -345,9 +341,17 @@ function OrderReviewPageContent() {
                                         </div>
                                     </div>
 
+                                    {/* Special Requests */}
+                                    {specialRequests && (
+                                        <div className="p-4 my-8 bg-white rounded-lg">
+                                            <h4 className="text-lg font-medium text-blue-800">Special Requests</h4>
+                                            <p className="text-sm text-gray-600">{specialRequests}</p>
+                                        </div>
+                                    )}
+
 
                                     {/* Delivery Options */}
-                                    <div className="space-y-2" style={{ marginBottom: '1.5rem' }}>
+                                    <div className="space-y-2" style={{ marginBottom: '1.5rem', marginTop: '1.5rem' }}>
                                         {productOptions
                                             .filter((product) => product.type === "delivery")
                                             .map((product) => (
@@ -377,37 +381,25 @@ function OrderReviewPageContent() {
                                                             <p className="text-sm text-gray-500">{product.description}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex gap-2 md:items-center">
-                                                        <span className="font-bold">+${product.price.toFixed(2)}</span>
-                                                        {product.originalPrice && (
-                                                            <span className="font-bold text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>
-                                                        )}
-                                                    </div>
+                                                    {product.originalPrice !== undefined && (
+                                                        <div className="flex gap-2 md:items-center">
+                                                            <span className="font-bold text-gray-700">+${product.price.toFixed(2)}</span>
+
+                                                            <span className="font-bold text-gray-400 line-through">
+                                                                ${product.originalPrice?.toFixed(2) ?? "0.00"}
+                                                            </span>
+                                                        </div>
+                                                    )}
+
                                                 </label>
                                             ))}
                                     </div>
 
-                                    {/* Special Requests */}
-                                    {specialRequests && (
-                                        <div className="p-4 bg-white rounded-lg">
-                                            <h4 className="text-lg font-medium text-blue-800">Special Requests</h4>
-                                            <p className="text-sm text-gray-600">{specialRequests}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border-t bg-primary md:relative md:rounded-md md:bg-primary/80">
+                                    <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border-t bg-primary md:relative md:rounded-md md:bg-primary/80 mb-8 text-right">
                                         <div className="flex items-center justify-between p-4">
                                             <span className="font-medium text-white md:block">
                                                 Total: <span className="font-bold">${calculateTotal().toFixed(2)}</span>
                                             </span>
-                                            <button
-                                                onClick={handleCheckout}
-                                                disabled={isLoading || lyrics.filter(line => line.modified !== line.original).length === 0}
-                                                className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
-                                                type="button"
-                                            >
-                                                {isLoading ? "Processing..." : "Checkout"} <ChevronRight className="-mr-1 size-4 md:size-5" />
-                                            </button>
                                         </div>
                                     </div>
                                 </div>

@@ -23,11 +23,6 @@ const BackButton: React.FC<BackButtonProps> = ({ href }) => {
         router.push(href);
     };
 
-    // Warn on page reload or close
-    window.onbeforeunload = () => {
-        return "Are you sure you want to leave? Your progress may be lost.";
-    };
-
     return (
         <button
             onClick={handleBackClick}

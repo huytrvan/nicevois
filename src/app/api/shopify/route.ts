@@ -1,16 +1,16 @@
+// src\app\api\shopify\route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 // Shopify credentials (server-side only)
-const SHOPIFY_STOREFRONT_API_TOKEN = process.env.SHOPIFY_STOREFRONT_API_TOKEN!;
+const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
-const CUSTOM_LYRICS_PRODUCT_ID = process.env.CUSTOM_LYRICS_PRODUCT_ID;
+const VARIANT_ID = process.env.VARIANT_ID; // Get variant ID from env variables
 
 // Interface for the request payload
 interface CartRequest {
     sessionId: string;
     price: number; // Price in dollars (e.g., 10.00)
-    name?: string; // Optional buyer email
-    email?: string; // Optional buyer email
+    wordChanged: number
     songName?: string; // Optional song name
     artist?: string; // Optional artist name
     songUrl?: string; // Optional song URL (fallback if name/artist not provided)
@@ -23,11 +23,61 @@ type ShopifyError = {
     message: string;
 };
 
-// POST handler to create a Shopify checkout session
+// Type definitions for the Shopify response
+interface LineItemNode {
+    title: string;
+    originalUnitPrice: string;
+    quantity: number;
+    customAttributes?: {
+        key: string;
+        value: string;
+    }[];
+}
+
+interface LineItemEdge {
+    node: LineItemNode;
+}
+
+interface GraphQLError {
+    message: string;
+    locations?: Array<{ line: number; column: number }>;
+    path?: string[];
+    extensions?: Record<string, unknown>;
+}
+
+interface DraftOrderResponse {
+    data: {
+        draftOrderCreate: {
+            draftOrder: {
+                id: string;
+                invoiceUrl: string;
+                lineItems: {
+                    edges: LineItemEdge[];
+                };
+            };
+            userErrors: ShopifyError[];
+        };
+    };
+    errors?: GraphQLError[]; // Properly typed GraphQL errors
+}
+
+// POST handler to create a Shopify draft order
 export async function POST(request: NextRequest) {
     try {
+        if (!SHOPIFY_ADMIN_API_TOKEN || !SHOPIFY_STORE_DOMAIN || !VARIANT_ID) {
+            console.error('Shopify Admin API credentials or Variant ID are not set.');
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: 'Missing Shopify API credentials or Variant ID',
+                    userMessage: 'Internal configuration error. Please contact support.',
+                },
+                { status: 500 }
+            );
+        }
+
         // Parse request body
-        const { sessionId, price, email, songName, artist, songUrl, deliveryType, lyrics }: CartRequest = await request.json();
+        const { sessionId, price, wordChanged, songName, artist, songUrl, deliveryType, lyrics }: CartRequest = await request.json();
 
         // Validate required fields
         if (!sessionId || price == null || !deliveryType || !lyrics) {
@@ -41,8 +91,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Prepare attributes array
-        const attributes = [
+        // Prepare custom attributes for the draft order
+        const customAttributes = [
             { key: 'sessionId', value: sessionId },
             { key: 'deliveryType', value: deliveryType },
             { key: 'songName', value: songName || 'Not specified' },
@@ -50,55 +100,89 @@ export async function POST(request: NextRequest) {
             ...(songUrl ? [{ key: 'songUrl', value: songUrl }] : []),
             // Add original and modified lyrics as attributes
             ...lyrics.map((line, index) => ({
-                key: `Line ${index + 1}`,
+                key: `line${index + 1}`,
                 value: `Original: ${line.original} → Modified: ${line.modified}`,
             })),
         ];
 
-
-        // Define cart line item for "Lyric Changer"
-        const lineItems = [
-            {
-                merchandiseId: CUSTOM_LYRICS_PRODUCT_ID,
-                quantity: 1,
-                attributes: attributes,
-            },
-        ];
-
-        // GraphQL mutation to create cart (unchanged)
-        const createCartQuery = `
-            mutation createCart($cartInput: CartInput!) {
-                cartCreate(input: $cartInput) {
-                    cart {
-                        id
-                        checkoutUrl
-                        cost {
-                            totalAmount { amount currencyCode }
-                            subtotalAmount { amount currencyCode }
-                        }
-                    }
-                    userErrors {
-                        field
-                        message
-                    }
+        // GraphQL mutation to create draft order
+        const createDraftOrderQuery = `
+            mutation draftOrderCreate($input: DraftOrderInput!) { 
+                draftOrderCreate(input: $input) { 
+                    draftOrder { 
+                        id 
+                        invoiceUrl 
+                        lineItems(first: 10) { 
+                            edges { 
+                                node { 
+                                    title 
+                                    originalUnitPrice 
+                                    quantity 
+                                    customAttributes { 
+                                        key 
+                                        value 
+                                    } 
+                                } 
+                            } 
+                        } 
+                    } 
+                    userErrors { 
+                        field 
+                        message 
+                    } 
                 }
             }
         `;
 
-        const cartInput = {
-            lineItems,
-            ...(email && { buyerIdentity: { email } }),
+        // Create title based on song name if available
+        let itemTitle;
+
+        if (songUrl && songUrl !== "") {
+            itemTitle = `Change lyrics for: "${songUrl}"`;
+        } else {
+            itemTitle = `Change lyrics for: "${songName} - ${artist}"`;
+        }
+
+        const draftOrderInput = {
+            lineItems: [
+                {
+                    variantId: `gid://shopify/ProductVariant/${VARIANT_ID}`,
+                    quantity: 1,
+                    title: itemTitle,
+                    customAttributes: [
+                        {
+                            key: "Priority",
+                            value: deliveryType === 'rush' ? "Rush Delivery (1 day)" : "Normal Delivery (2-7 days)"
+                        },
+                        {
+                            key: "Words Changed",
+                            value: wordChanged.toString()
+                        },
+                        {
+                            key: "Order ID",
+                            value: sessionId
+                        }
+                    ]
+                }
+            ],
+            customAttributes,
+            note: "Custom lyrics order",
+            tags: ["custom-lyrics", "ai-generated"],
+            shippingLine: {
+                title: "Digital Delivery",
+                price: price.toFixed(2)
+            }
         };
 
-        const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/api/2023-10/graphql.json`, {
+        const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}.myshopify.com/admin/api/2025-01/graphql.json`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_API_TOKEN,
+                'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
             },
             body: JSON.stringify({
-                query: createCartQuery,
-                variables: { cartInput },
+                query: createDraftOrderQuery,
+                variables: { input: draftOrderInput },
             }),
         });
 
@@ -114,10 +198,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const json = await response.json();
+        const json = await response.json() as DraftOrderResponse;
 
-        if (json.errors || json.data?.cartCreate?.userErrors?.length) {
-            const errorDetails = (json.errors || json.data.cartCreate.userErrors as ShopifyError[])
+        if (json.errors || json.data?.draftOrderCreate?.userErrors?.length) {
+            const errorDetails = (json.errors || json.data.draftOrderCreate.userErrors)
                 .map((e: ShopifyError) => e.message)
                 .join(', ');
             console.error(`Shopify GraphQL Error: ${errorDetails}`);
@@ -126,25 +210,25 @@ export async function POST(request: NextRequest) {
                     success: false,
                     error: 'GraphQL error',
                     details: errorDetails,
-                    userMessage: 'Failed to create your cart. Please try again.',
+                    userMessage: 'Failed to create your order. Please try again.',
                 },
                 { status: 400 }
             );
         }
 
-        const cart = json.data.cartCreate.cart;
+        const draftOrder = json.data.draftOrderCreate.draftOrder;
 
-        // Return cart details including checkout URL
+        // Return draft order details including invoice URL
         return NextResponse.json({
             success: true,
             data: {
-                cartId: cart.id,
-                checkoutUrl: cart.checkoutUrl,
-                cost: cart.cost,
+                orderId: draftOrder.id,
+                invoiceUrl: draftOrder.invoiceUrl,  // This is the invoice URL
+                lineItems: draftOrder.lineItems.edges.map((edge: LineItemEdge) => edge.node)
             },
         });
     } catch (error) {
-        console.error('Error in cart creation:', error);
+        console.error('Error in draft order creation:', error);
         return NextResponse.json(
             {
                 success: false,

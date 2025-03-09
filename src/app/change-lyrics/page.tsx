@@ -453,10 +453,9 @@ function ChangeLyricsPageContent() {
     const handleNextStep = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        console.log("handleNextStep triggered, currentStep:", currentStep); // Debug step
+        console.log("handleNextStep triggered, currentStep:", currentStep);
 
         const hasChanges = lyrics.some((line) => line.modified !== line.original);
-
         if (!hasChanges) {
             toast.error('No changes made', {
                 description: 'Please modify at least one lyric before proceeding.',
@@ -473,8 +472,9 @@ function ChangeLyricsPageContent() {
         }
 
         try {
-            // Store state in localStorage
-            console.log("Storing data in localStorage..."); // Debug storage
+            console.log("Storing data in localStorage...");
+
+            // Store lyric-related data
             localStorage.setItem('lyrics', JSON.stringify(lyrics));
             localStorage.setItem('cost', cost.toString());
             localStorage.setItem('currentStep', (currentStep + 1).toString());
@@ -482,9 +482,16 @@ function ChangeLyricsPageContent() {
             localStorage.setItem('formValues', JSON.stringify(formValues));
             localStorage.setItem('deliveryOption', 'Standard Delivery');
 
-            console.log("Navigating to /review, new currentStep:", currentStep + 1); // Debug navigation
+            // Store song information safely in localStorage
+            if (songId) localStorage.setItem('songId', songId);
+            if (songTitle) localStorage.setItem('songTitle', songTitle);
+            if (songArtist) localStorage.setItem('songArtist', songArtist);
+            if (songUrl) localStorage.setItem('songUrl', songUrl);
+
+            console.log("Navigating to /review, new currentStep:", currentStep + 1);
             setCurrentStep(currentStep + 1);
             router.push("/review");
+
         } catch (err) {
             console.error('Error during next step:', err);
             toast.error('Error', {
@@ -492,6 +499,7 @@ function ChangeLyricsPageContent() {
             });
         }
     };
+
 
 
     // Define step data
