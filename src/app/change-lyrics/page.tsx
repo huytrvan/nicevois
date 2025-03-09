@@ -31,36 +31,30 @@ type LyricLine = {
 
 // Utility functions
 function calculateWordChanges(original: string, modified: string): WordChange[] {
-    // Helper function to remove punctuation for comparison
-    const sanitize = (word: string) => word.replace(/[^\w\d]/g, '').toLowerCase();
+    const stripNonAlphanumeric = (text: string) => text.replace(/[^a-zA-Z0-9\s]/g, '');
 
-    // Normalize text by trimming and handling internal spaces
     const normalizeText = (text: string) => {
-        return text
-            .trim()                // Remove leading/trailing spaces
-            .replace(/\s+/g, ' '); // Normalize internal spaces
+        return stripNonAlphanumeric(text)
+            .replace(/[\n\r]+/g, '')
+            .trim()
+            .replace(/\s+/g, ' ');
     };
 
     const normalizedOriginal = normalizeText(original);
     const normalizedModified = normalizeText(modified);
 
-    // If they're equal after normalization, no changes
     if (normalizedOriginal === normalizedModified) {
         return [];
     }
 
-    // Split into words, filtering out empty entries
     const originalWords = normalizedOriginal.split(' ').filter(word => word.length > 0);
     const modifiedWords = normalizedModified.split(' ').filter(word => word.length > 0);
 
-    // If both are empty after filtering, no changes
     if (originalWords.length === 0 && modifiedWords.length === 0) {
         return [];
     }
 
-    const sanitizedOriginalWords = originalWords.map(sanitize);
-    const sanitizedModifiedWords = modifiedWords.map(sanitize);
-    const lcs = findLongestCommonSubsequence(sanitizedOriginalWords, sanitizedModifiedWords);
+    const lcs = findLongestCommonSubsequence(originalWords, modifiedWords);
 
     const wordChanges: WordChange[] = [];
     let origIndex = 0;
@@ -70,10 +64,9 @@ function calculateWordChanges(original: string, modified: string): WordChange[] 
     while (origIndex < originalWords.length || modIndex < modifiedWords.length) {
         const originalWord = originalWords[origIndex] || '';
         const newWord = modifiedWords[modIndex] || '';
-        const sanitizedOrig = sanitizedOriginalWords[origIndex] || '';
-        const sanitizedNew = sanitizedModifiedWords[modIndex] || '';
 
-        if (lcsIndex < lcs.length && sanitizedOrig === lcs[lcsIndex] && sanitizedNew === lcs[lcsIndex]) {
+        if (lcsIndex < lcs.length && originalWord === lcs[lcsIndex] && newWord === lcs[lcsIndex]) {
+            // Unchanged word
             wordChanges.push({
                 originalWord,
                 newWord,
@@ -84,8 +77,22 @@ function calculateWordChanges(original: string, modified: string): WordChange[] 
             origIndex++;
             modIndex++;
             lcsIndex++;
-        } else if (modIndex < modifiedWords.length && (lcsIndex >= lcs.length || sanitizedNew !== lcs[lcsIndex])) {
-            // Only add if it's not just whitespace
+        } else if (originalWord && newWord && originalWord !== newWord &&
+            (origIndex === originalWords.length - 1 || modIndex === modifiedWords.length - 1 ||
+                (origIndex + 1 < originalWords.length && modIndex + 1 < modifiedWords.length &&
+                    originalWords[origIndex + 1] === modifiedWords[modIndex + 1]))) {
+            // Replacement: words differ, and either at the end or next words match
+            wordChanges.push({
+                originalWord,
+                newWord,
+                originalIndex: origIndex,
+                newIndex: modIndex,
+                hasChanged: true
+            });
+            origIndex++;
+            modIndex++;
+        } else if (!originalWord || (modIndex < modifiedWords.length && (lcsIndex >= lcs.length || newWord !== lcs[lcsIndex]))) {
+            // Addition
             if (newWord.trim().length > 0) {
                 wordChanges.push({
                     originalWord: '',
@@ -96,8 +103,8 @@ function calculateWordChanges(original: string, modified: string): WordChange[] 
                 });
             }
             modIndex++;
-        } else if (origIndex < originalWords.length && (lcsIndex >= lcs.length || sanitizedOrig !== lcs[lcsIndex])) {
-            // Only add if it's not just whitespace
+        } else if (!newWord || (origIndex < originalWords.length && (lcsIndex >= lcs.length || originalWord !== lcs[lcsIndex]))) {
+            // Deletion
             if (originalWord.trim().length > 0) {
                 wordChanges.push({
                     originalWord,
@@ -111,12 +118,8 @@ function calculateWordChanges(original: string, modified: string): WordChange[] 
         }
     }
 
-    // Filter out changes that are just punctuation
-    return wordChanges.filter(change =>
-        !(change.hasChanged && sanitize(change.originalWord) === sanitize(change.newWord))
-    );
+    return wordChanges;
 }
-
 
 
 function findLongestCommonSubsequence(arr1: string[], arr2: string[]): string[] {
@@ -157,7 +160,10 @@ function findLongestCommonSubsequence(arr1: string[], arr2: string[]): string[] 
 
 
 function generateLyricsData(text: string): LyricLine[] {
-    const lines = text.split('\n')
+    // Remove leading/trailing newlines and normalize line endings
+    const cleanedText = text.replace(/^[\n\r]+|[\n\r]+$/g, '').replace(/\r\n|\r/g, '\n');
+    const lines = cleanedText
+        .split('\n')
         .filter(line => line.trim().length > 0)
         .map((line, index) => ({
             id: index,
@@ -198,15 +204,17 @@ function ChangeLyricsPageContent() {
         (sum, line) => sum + line.wordChanges.filter(w => w.hasChanged).length,
         0
     );
-    const [cost, setCost] = useState(35); // Start with base cost of $35
+    const baseCost = 35;
+    const addCost = 5;
+    const [cost, setCost] = useState(baseCost); // Start with base cost of $35
 
     // Update cost whenever word changes are modified
     useEffect(() => {
         let additionalCost = 0;
-        const baseCost = 35;
 
-        if (totalWordChanges > 1) {
-            additionalCost = totalWordChanges * 5; // Removed `let`, so it updates the outer variable
+        if (totalWordChanges > 0) {
+            // First change is free, each additional change after that is $5
+            additionalCost = Math.max(0, totalWordChanges - 1) * addCost;
         }
 
         setCost(baseCost + additionalCost);
@@ -309,26 +317,39 @@ function ChangeLyricsPageContent() {
         setLyrics(prevLyrics => {
             const updatedLyrics = prevLyrics.map(line => {
                 if (line.id === id) {
-                    // Normalize text
                     const normalizeText = (text: string) => {
                         return text
-                            .trim()                // Remove leading/trailing spaces
-                            .replace(/\s+/g, ' '); // Normalize internal spaces
+                            .replace(/[\n\r]+/g, '')
+                            .trim()
+                            .replace(/\s+/g, ' ');
                     };
 
-                    const normalizedOriginal = normalizeText(line.original);
-                    const normalizedText = normalizeText(newText || '');
+                    // Strip HTML and ⌧ symbols from newText
+                    const stripHtmlAndSymbols = (text: string) => {
+                        const div = document.createElement('div');
+                        div.innerHTML = text;
+                        const plainText = div.textContent || div.innerText || '';
+                        // Remove all ⌧ symbols
+                        return plainText.replace(/⌧/g, '').replace(/[\n\r]+$/g, '');
+                    };
 
-                    // Skip if no meaningful change
-                    if (normalizedOriginal === normalizedText && line.wordChanges.length === 0) {
-                        return { ...line, modified: normalizedText };
+                    const sanitizedNewText = stripHtmlAndSymbols(newText);
+                    const normalizedOriginal = normalizeText(line.original);
+                    const normalizedText = normalizeText(sanitizedNewText || '');
+                    const normalizedModified = normalizeText(line.modified);
+
+                    // If no meaningful change since last modified, preserve state
+                    if (normalizedText === normalizedModified) {
+                        return line;
                     }
 
                     const wordChanges = calculateWordChanges(normalizedOriginal, normalizedText);
+
                     const modifiedWords = normalizedText.split(' ').filter(word => word.length > 0);
                     const markedWords = [...modifiedWords];
                     const markedPositions = new Set<number>();
 
+                    // Handle additions and replacements
                     wordChanges.forEach(change => {
                         if (change.hasChanged && change.newIndex >= 0 && !markedPositions.has(change.newIndex)) {
                             if (change.newWord) {
@@ -346,8 +367,7 @@ function ChangeLyricsPageContent() {
                     deletions.forEach(deletion => {
                         let insertPos = 0;
                         for (const change of wordChanges) {
-                            if (change.originalIndex < (deletion.originalIndex ?? 0) &&
-                                change.newIndex >= 0) {
+                            if (change.originalIndex < (deletion.originalIndex ?? 0) && change.newIndex >= 0) {
                                 insertPos = Math.max(insertPos, change.newIndex + 1);
                             }
                         }
@@ -370,9 +390,11 @@ function ChangeLyricsPageContent() {
 
                     const markedText = markedWords.join(' ');
 
+                    console.log(`Line ${id} - New Marked Text:`, markedText);
+
                     return {
                         ...line,
-                        modified: normalizedText,
+                        modified: normalizedText, // Store plain text without ⌧
                         markedText,
                         wordChanges
                     };
@@ -575,15 +597,23 @@ function ChangeLyricsPageContent() {
 
                             {/* Lyrics cost info */}
                             {!isLoading && (
-                                <div className="relative w-full rounded-lg p-4 dark:border-gray-100/5 bg-primary/80 text-white/80" role="alert">
+                                <div
+                                    className="relative w-full rounded-lg p-4 dark:border-gray-100/5 bg-primary/80 text-white/80"
+                                    role="alert"
+                                >
                                     <div className="flex flex-col gap-2">
                                         <p className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-inherit text-sm md:text-base md:leading-6">
                                             <span className="my-1.5 flex flex-row gap-1">
                                                 <ListMusic className="-mt-0.5 mr-1 size-4 md:size-5 md:mt-0.5" />
                                                 <span>
-                                                    <strong>Total Word Changes: {totalWordChanges}</strong> <br />
-                                                    Base pricing: <strong>$35</strong> (starting from first word) <br />
-                                                    With every word changed: <strong>+$5 / word</strong>
+                                                    <strong>Pricing Summary</strong> <br />
+                                                    <span>Base Fee (First Change): <strong>${baseCost}</strong></span> <br />
+                                                    <span>Additional Changes: <strong>{Math.max(0, totalWordChanges - 1)} × ${addCost} = ${Math.max(0, totalWordChanges - 1) * addCost}</strong></span> <br />
+                                                    <div className="text-base md:text-lg border-t border-white/20 mt-2 pt-2">
+                                                        <span>
+                                                            <strong>Total: ${cost}</strong>
+                                                        </span>
+                                                    </div>
                                                 </span>
                                             </span>
                                         </p>

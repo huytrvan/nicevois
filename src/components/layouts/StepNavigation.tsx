@@ -17,9 +17,12 @@ const StepIndicator = ({ step, label, isActive, isComplete }: StepProps) => (
     <Tooltip.Provider>
         <Tooltip.Root>
             <Tooltip.Trigger asChild>
-                <div className="flex flex-col items-center" style={{ opacity: 1, transform: 'translateY(2px)' }}>
+                <div
+                    className="flex flex-col items-center pointer-events-none" // Added pointer-events-none
+                    style={{ opacity: 1, transform: 'translateY(2px)' }}
+                >
                     <div
-                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-normal transition duration-150 hover:ring focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 size-6 rounded-full p-0 peer font-roboto disabled:bg-white/80 disabled:text-primary disabled:opacity-10"
+                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-normal transition duration-150 focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 size-6 rounded-full p-0 peer font-roboto disabled:bg-white/80 disabled:text-primary disabled:opacity-10 cursor-default" // Added cursor-default, removed hover states
                         aria-label={label}
                         style={{ opacity: !isActive && !isComplete ? 0.1 : 1 }}
                     >
@@ -29,7 +32,10 @@ const StepIndicator = ({ step, label, isActive, isComplete }: StepProps) => (
                             step
                         )}
                     </div>
-                    <p className="scroll-m-20 font-roboto text-sm leading-normal tracking-wide dark:text-white mt-2 text-center font-semibold text-white peer-disabled:font-normal peer-disabled:opacity-10" style={{ opacity: !isActive && !isComplete ? 0.1 : 1 }}>
+                    <p
+                        className="scroll-m-20 font-roboto text-sm leading-normal tracking-wide dark:text-white mt-2 text-center font-semibold text-white peer-disabled:font-normal peer-disabled:opacity-10"
+                        style={{ opacity: !isActive && !isComplete ? 0.1 : 1 }}
+                    >
                         {label}
                     </p>
                 </div>
