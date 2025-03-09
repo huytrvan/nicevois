@@ -90,48 +90,23 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+        const formattedLyricsChanges = lyrics
+            .filter(line => line.modified !== line.original)
+            .map((line, index) => `${index + 1}: "${line.original}" → "${line.modified}"`)
+            .join("\n");
 
         // Prepare custom attributes for the draft order
         const customAttributes = [
-            { key: 'sessionId', value: sessionId },
-            { key: 'deliveryType', value: deliveryType },
-            { key: 'songName', value: songName || 'Not specified' },
-            { key: 'artist', value: artist || 'Not specified' },
-            ...(songUrl ? [{ key: 'songUrl', value: songUrl }] : []),
-            // Add original and modified lyrics as attributes
-            ...lyrics.map((line, index) => ({
-                key: `line${index + 1}`,
-                value: `Original: ${line.original} → Modified: ${line.modified}`,
-            })),
+            { key: 'Order Id', value: sessionId },
+            { key: 'Delivery Type', value: deliveryType === 'rush' ? "Rush Delivery (1 day)" : "Normal Delivery (2-7 days)" },
+            { key: 'Song Name', value: songName || 'Not specified' },
+            { key: 'Artist', value: artist || 'Not specified' },
+            { key: 'Song Url', value: songUrl || 'Not specified' }
         ];
 
         // GraphQL mutation to create draft order
         const createDraftOrderQuery = `
-            mutation draftOrderCreate($input: DraftOrderInput!) { 
-                draftOrderCreate(input: $input) { 
-                    draftOrder { 
-                        id 
-                        invoiceUrl 
-                        lineItems(first: 10) { 
-                            edges { 
-                                node { 
-                                    title 
-                                    originalUnitPrice 
-                                    quantity 
-                                    customAttributes { 
-                                        key 
-                                        value 
-                                    } 
-                                } 
-                            } 
-                        } 
-                    } 
-                    userErrors { 
-                        field 
-                        message 
-                    } 
-                }
-            }
+            mutation draftOrderCreate($input: DraftOrderInput!) { draftOrderCreate(input: $input) { draftOrder { id invoiceUrl lineItems(first: 10) { edges { node { title originalUnitPrice quantity } } } } userErrors { field message } } }
         `;
 
         // Create title based on song name if available
@@ -146,16 +121,16 @@ export async function POST(request: NextRequest) {
         const draftOrderInput = {
             lineItems: [
                 {
-                    variantId: `gid://shopify/ProductVariant/${VARIANT_ID}`,
                     quantity: 1,
                     title: itemTitle,
+                    originalUnitPrice: 0,
                     customAttributes: [
                         {
                             key: "Priority",
                             value: deliveryType === 'rush' ? "Rush Delivery (1 day)" : "Normal Delivery (2-7 days)"
                         },
                         {
-                            key: "Words Changed",
+                            key: "Words changed",
                             value: wordChanged.toString()
                         },
                         {
@@ -166,7 +141,7 @@ export async function POST(request: NextRequest) {
                 }
             ],
             customAttributes,
-            note: "Custom lyrics order",
+            note: `Custom lyrics order:\n${formattedLyricsChanges}`,
             tags: ["custom-lyrics", "ai-generated"],
             shippingLine: {
                 title: "Digital Delivery",
