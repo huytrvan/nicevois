@@ -34,16 +34,34 @@ function calculateWordChanges(original: string, modified: string): WordChange[] 
     // Helper function to remove punctuation for comparison
     const sanitize = (word: string) => word.replace(/[^\w\d]/g, '').toLowerCase();
 
-    // Normalize whitespace and split into words
-    const originalWords = original.match(/\S+/g) || [];
-    const modifiedWords = modified.match(/\S+/g) || [];
+    // Normalize text by trimming and handling internal spaces
+    const normalizeText = (text: string) => {
+        return text
+            .trim()                // Remove leading/trailing spaces
+            .replace(/\s+/g, ' '); // Normalize internal spaces
+    };
 
-    // Use LCS on sanitized words
+    const normalizedOriginal = normalizeText(original);
+    const normalizedModified = normalizeText(modified);
+
+    // If they're equal after normalization, no changes
+    if (normalizedOriginal === normalizedModified) {
+        return [];
+    }
+
+    // Split into words, filtering out empty entries
+    const originalWords = normalizedOriginal.split(' ').filter(word => word.length > 0);
+    const modifiedWords = normalizedModified.split(' ').filter(word => word.length > 0);
+
+    // If both are empty after filtering, no changes
+    if (originalWords.length === 0 && modifiedWords.length === 0) {
+        return [];
+    }
+
     const sanitizedOriginalWords = originalWords.map(sanitize);
     const sanitizedModifiedWords = modifiedWords.map(sanitize);
     const lcs = findLongestCommonSubsequence(sanitizedOriginalWords, sanitizedModifiedWords);
 
-    // Create mapping of changes
     const wordChanges: WordChange[] = [];
     let origIndex = 0;
     let modIndex = 0;
@@ -52,32 +70,51 @@ function calculateWordChanges(original: string, modified: string): WordChange[] 
     while (origIndex < originalWords.length || modIndex < modifiedWords.length) {
         const originalWord = originalWords[origIndex] || '';
         const newWord = modifiedWords[modIndex] || '';
-
         const sanitizedOrig = sanitizedOriginalWords[origIndex] || '';
         const sanitizedNew = sanitizedModifiedWords[modIndex] || '';
 
         if (lcsIndex < lcs.length && sanitizedOrig === lcs[lcsIndex] && sanitizedNew === lcs[lcsIndex]) {
-            wordChanges.push({ originalWord, newWord, originalIndex: origIndex, newIndex: modIndex, hasChanged: false });
+            wordChanges.push({
+                originalWord,
+                newWord,
+                originalIndex: origIndex,
+                newIndex: modIndex,
+                hasChanged: false
+            });
             origIndex++;
             modIndex++;
             lcsIndex++;
         } else if (modIndex < modifiedWords.length && (lcsIndex >= lcs.length || sanitizedNew !== lcs[lcsIndex])) {
-            wordChanges.push({ originalWord: '', newWord, originalIndex: -1, newIndex: modIndex, hasChanged: true });
+            // Only add if it's not just whitespace
+            if (newWord.trim().length > 0) {
+                wordChanges.push({
+                    originalWord: '',
+                    newWord,
+                    originalIndex: -1,
+                    newIndex: modIndex,
+                    hasChanged: true
+                });
+            }
             modIndex++;
         } else if (origIndex < originalWords.length && (lcsIndex >= lcs.length || sanitizedOrig !== lcs[lcsIndex])) {
-            wordChanges.push({ originalWord, newWord: '', originalIndex: origIndex, newIndex: -1, hasChanged: true });
+            // Only add if it's not just whitespace
+            if (originalWord.trim().length > 0) {
+                wordChanges.push({
+                    originalWord,
+                    newWord: '',
+                    originalIndex: origIndex,
+                    newIndex: -1,
+                    hasChanged: true
+                });
+            }
             origIndex++;
         }
     }
 
-    // **Step 2: Remove punctuation-only changes**
-    wordChanges.forEach(change => {
-        if (change.hasChanged && sanitize(change.originalWord) === sanitize(change.newWord)) {
-            change.hasChanged = false; // Mark it as unchanged
-        }
-    });
-
-    return wordChanges;
+    // Filter out changes that are just punctuation
+    return wordChanges.filter(change =>
+        !(change.hasChanged && sanitize(change.originalWord) === sanitize(change.newWord))
+    );
 }
 
 
@@ -120,17 +157,15 @@ function findLongestCommonSubsequence(arr1: string[], arr2: string[]): string[] 
 
 
 function generateLyricsData(text: string): LyricLine[] {
-    // Split by newlines and filter out empty lines
     const lines = text.split('\n')
         .filter(line => line.trim().length > 0)
         .map((line, index) => ({
             id: index,
-            text: line,
-            original: line,
-            modified: line,
-            wordChanges: [], // Process words as needed
+            text: line.trim(),
+            original: line.trim(),
+            modified: line.trim(),
+            wordChanges: [],
         }));
-
     return lines;
 }
 
@@ -274,24 +309,30 @@ function ChangeLyricsPageContent() {
         setLyrics(prevLyrics => {
             const updatedLyrics = prevLyrics.map(line => {
                 if (line.id === id) {
-                    // Normalize whitespace to avoid counting duplicate spaces as words
-                    const normalizedText = newText.replace(/\s+/g, ' ').trim();
-                    const wordChanges = calculateWordChanges(line.original, normalizedText);
+                    // Normalize text
+                    const normalizeText = (text: string) => {
+                        return text
+                            .trim()                // Remove leading/trailing spaces
+                            .replace(/\s+/g, ' '); // Normalize internal spaces
+                    };
 
-                    // Create a marked-up version of the modified text
-                    // We'll use an array-based approach for precise highlighting
+                    const normalizedOriginal = normalizeText(line.original);
+                    const normalizedText = normalizeText(newText || '');
+
+                    // Skip if no meaningful change
+                    if (normalizedOriginal === normalizedText && line.wordChanges.length === 0) {
+                        return { ...line, modified: normalizedText };
+                    }
+
+                    const wordChanges = calculateWordChanges(normalizedOriginal, normalizedText);
                     const modifiedWords = normalizedText.split(' ').filter(word => word.length > 0);
                     const markedWords = [...modifiedWords];
-
-                    // Track which positions have been marked as changed
                     const markedPositions = new Set<number>();
 
-                    // Only mark words that were actually added or changed
                     wordChanges.forEach(change => {
-                        if (change.hasChanged && change.newIndex !== undefined && change.newIndex >= 0) {
-                            if (change.newWord && !markedPositions.has(change.newIndex)) {
-                                markedWords[change.newIndex] =
-                                    `<span class="text-red-600">${change.newWord}</span>`;
+                        if (change.hasChanged && change.newIndex >= 0 && !markedPositions.has(change.newIndex)) {
+                            if (change.newWord) {
+                                markedWords[change.newIndex] = `<span class="text-red-600">${change.newWord}</span>`;
                                 markedPositions.add(change.newIndex);
                             }
                         }
@@ -301,37 +342,28 @@ function ChangeLyricsPageContent() {
                     const deletions = wordChanges.filter(
                         change => change.hasChanged && change.newWord === '' && change.originalWord !== ''
                     );
-
-                    // Group deletions by position to avoid multiple deletion markers at the same spot
                     const deletionPositions = new Map<number, number>();
                     deletions.forEach(deletion => {
-                        // Find appropriate insertion point
                         let insertPos = 0;
-                        // Count words that precede this deletion in original
                         for (const change of wordChanges) {
-                            if (change.originalIndex !== undefined &&
-                                change.originalIndex < (deletion.originalIndex ?? 0) &&
-                                change.newIndex !== undefined && change.newIndex >= 0) {
+                            if (change.originalIndex < (deletion.originalIndex ?? 0) &&
+                                change.newIndex >= 0) {
                                 insertPos = Math.max(insertPos, change.newIndex + 1);
                             }
                         }
-
-                        // Increment count for this position
                         deletionPositions.set(
                             insertPos,
                             (deletionPositions.get(insertPos) || 0) + 1
                         );
                     });
 
-                    // Insert deletion markers
                     Array.from(deletionPositions.entries())
-                        .sort((a, b) => b[0] - a[0]) // Process from end to avoid shifting indices
+                        .sort((a, b) => b[0] - a[0])
                         .forEach(([position, count]) => {
                             const deleteSymbol = `<span class="text-red-600">⌧${count > 1 ? ` (${count})` : ''}</span>`;
                             if (position <= markedWords.length) {
                                 markedWords.splice(position, 0, deleteSymbol);
                             } else {
-                                // If position is beyond the end, append to the end
                                 markedWords.push(deleteSymbol);
                             }
                         });
@@ -348,14 +380,14 @@ function ChangeLyricsPageContent() {
                 return line;
             });
 
-            // Update the formValues with the latest lyrics
-            const lyricsText = updatedLyrics.map(line => line.modified).join('\n');
-            setFormValues(prev => ({ ...prev, lyrics: lyricsText }));
+            setFormValues(prev => ({
+                ...prev,
+                lyrics: updatedLyrics.map(line => line.modified).join('\n')
+            }));
 
             return updatedLyrics;
         });
     }
-
     const validateForm = () => {
         const errors: Record<string, string> = {};
         let isValid = true;
@@ -402,9 +434,33 @@ function ChangeLyricsPageContent() {
     };
 
     const handleNextStep = () => {
-        if (currentStep < 4) {
-            setCurrentStep(currentStep + 1);
-            handleSubmit(new Event('submit') as unknown as React.FormEvent);
+        // Check if at least one lyric has been modified
+        const hasChanges = lyrics.some((line) => line.modified !== line.original);
+
+        if (!hasChanges) {
+            toast.error('No changes made', {
+                description: 'Please modify at least one lyric before proceeding.',
+            });
+            return;
+        }
+
+        // Use the existing validateForm function
+        if (validateForm()) {
+            if (currentStep < 4) {
+                setCurrentStep(currentStep + 1);
+
+                // Store lyrics in localStorage to avoid URL length limitations
+                localStorage.setItem('manualEntryLyrics', formValues.lyrics);
+
+                // Navigate to the checkout step
+                router.push(`/review`);
+            }
+        } else {
+            // Show toast with the first error
+            const firstError = Object.values(formErrors)[0];
+            toast.error('Invalid input', {
+                description: firstError || 'Please fix the errors in the form',
+            });
         }
     };
 

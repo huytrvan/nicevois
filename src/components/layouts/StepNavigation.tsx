@@ -4,6 +4,7 @@
 import React from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import * as Separator from '@radix-ui/react-separator';
+import { Check } from 'lucide-react';
 
 export type StepProps = {
     step: number;
@@ -17,21 +18,18 @@ const StepIndicator = ({ step, label, isActive, isComplete }: StepProps) => (
         <Tooltip.Root>
             <Tooltip.Trigger asChild>
                 <div className="flex flex-col items-center" style={{ opacity: 1, transform: 'translateY(2px)' }}>
-                    <button
-                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 size-6 rounded-full p-0 active:scale-90 peer font-roboto disabled:bg-white/80 disabled:text-primary disabled:opacity-10"
-                        type="button"
-                        role="tab"
-                        disabled={!isActive && !isComplete}
+                    <div
+                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-normal transition duration-150 hover:ring focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 size-6 rounded-full p-0 peer font-roboto disabled:bg-white/80 disabled:text-primary disabled:opacity-10"
+                        aria-label={label}
+                        style={{ opacity: !isActive && !isComplete ? 0.1 : 1 }}
                     >
                         {isComplete ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-                                <path d="M20 6 9 17l-5-5"></path>
-                            </svg>
+                            <Check />
                         ) : (
                             step
                         )}
-                    </button>
-                    <p className="scroll-m-20 font-roboto text-sm leading-normal tracking-wide dark:text-white mt-2 text-center font-semibold text-white peer-disabled:font-normal peer-disabled:opacity-10">
+                    </div>
+                    <p className="scroll-m-20 font-roboto text-sm leading-normal tracking-wide dark:text-white mt-2 text-center font-semibold text-white peer-disabled:font-normal peer-disabled:opacity-10" style={{ opacity: !isActive && !isComplete ? 0.1 : 1 }}>
                         {label}
                     </p>
                 </div>
