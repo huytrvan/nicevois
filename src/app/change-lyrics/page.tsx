@@ -8,18 +8,11 @@ import React from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
 import * as Separator from '@radix-ui/react-separator';
-import * as Tooltip from '@radix-ui/react-tooltip';
 import SignInToSaveButton from "@/components/SignInToSaveButton";
 import { Toaster, toast } from 'sonner';
+import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
 
 // Type definitions
-type StepProps = {
-    step: number;
-    label: string;
-    isActive: boolean;
-    isComplete?: boolean;
-};
-
 type WordChange = {
     originalWord: string;
     newWord: string;
@@ -35,51 +28,6 @@ type LyricLine = {
     markedText?: string; // Optional, since it may not always be present
     wordChanges: WordChange[];
 };
-
-// Step navigation components
-const StepIndicator = ({ step, label, isActive, isComplete }: StepProps) => (
-    <Tooltip.Provider>
-        <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-                <div className="flex flex-col items-center" style={{ opacity: 1, transform: 'translateY(2px)' }}>
-                    <button
-                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 size-6 rounded-full p-0 active:scale-90 peer font-roboto disabled:bg-white/80 disabled:text-primary disabled:opacity-10"
-                        type="button"
-                        role="tab"
-                        disabled={!isActive && !isComplete}
-                    >
-                        {isComplete ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-                                <path d="M20 6 9 17l-5-5"></path>
-                            </svg>
-                        ) : (
-                            step
-                        )}
-                    </button>
-                    <p className="scroll-m-20 font-roboto text-sm leading-normal tracking-wide dark:text-white mt-2 text-center font-semibold text-white peer-disabled:font-normal peer-disabled:opacity-10">
-                        {label}
-                    </p>
-                </div>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-                <Tooltip.Content
-                    className="bg-black/90 text-white px-3 py-1.5 rounded text-sm"
-                    sideOffset={5}
-                >
-                    {label}
-                    <Tooltip.Arrow className="fill-black/90" />
-                </Tooltip.Content>
-            </Tooltip.Portal>
-        </Tooltip.Root>
-    </Tooltip.Provider>
-);
-
-const StepDivider = ({ isActive }: { isActive: boolean }) => (
-    <Separator.Root
-        orientation="horizontal"
-        className={`dark:bg-gray-100/5 w-full -mt-6 h-[1.75px] flex-1 duration-1000 animate-in fade-in ${isActive ? "bg-primary/30" : "bg-white/5"}`}
-    />
-);
 
 // Utility functions
 function calculateWordChanges(original: string, modified: string): WordChange[] {
@@ -461,9 +409,9 @@ function ChangeLyricsPageContent() {
     };
 
     // Define step data
-    const steps = [
-        { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: true },
-        { step: 2, label: "Change The Lyrics", isActive: currentStep === 2, isComplete: false },
+    const steps: StepProps[] = [
+        { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },
+        { step: 2, label: "Change The Lyrics", isActive: currentStep === 2, isComplete: currentStep > 2 },
         { step: 3, label: "Review Order", isActive: currentStep === 3, isComplete: false },
     ];
 
