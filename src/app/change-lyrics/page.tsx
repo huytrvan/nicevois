@@ -253,10 +253,10 @@ function ChangeLyricsPageContent() {
 
     // Fetch lyrics from API if songId is available
     useEffect(() => {
-        if (!songId && !isManualEntry) {
-            router.push('/');
-            return;
-        }
+        // if (!songId && !isManualEntry) {
+        //     router.push('/');
+        //     return;
+        // }
 
         let isMounted = true; // For cleanup
 
@@ -324,8 +324,14 @@ function ChangeLyricsPageContent() {
 
             const savedCost = parseFloat(localStorage.getItem('cost') || '35');
             setCost(savedCost);
+
+            // Optionally load deliveryOption if needed, though it’s set in review
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const savedDelivery = localStorage.getItem('deliveryOption') || 'Standard Delivery';
+            // You could use this if you add delivery options to change-lyrics later
         } catch (error) {
             console.error('Error restoring state from localStorage:', error);
+            toast.error('Failed to restore previous changes');
         }
     }, []);
 
@@ -443,64 +449,12 @@ function ChangeLyricsPageContent() {
         return isValid;
     };
 
-    const createShopifyCart = async () => {
-        setIsLoading(true);
-        setError('');
-
-        try {
-            const sessionId = localStorage.getItem('sessionId') ||
-                Math.random().toString(36).substring(2, 15);
-            localStorage.setItem('sessionId', sessionId);
-
-            const orderData = {
-                sessionId,
-                originalLyrics: lyrics.map(l => l.original).join('\n'),
-                modifiedLyrics: lyrics.map(l => l.modified).join('\n'),
-                wordChanges: lyrics.flatMap(line =>
-                    line.wordChanges
-                        .filter(w => w.hasChanged)
-                        .map(w => `${w.originalWord} → ${w.newWord}`)
-                ),
-                cost,
-                specialRequests,
-                songTitle: songTitle || 'Not specified',
-                songArtist: songArtist || 'Not specified',
-                email: localStorage.getItem('userEmail')
-            };
-
-            const response = await fetch('/api/shopify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(orderData)
-            });
-
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.userMessage || 'Failed to create cart');
-            }
-
-            localStorage.setItem('cartId', result.data.cartId);
-            if (result.data.checkoutUrl) {
-                window.location.href = result.data.checkoutUrl;
-            } else {
-                router.push('/review');
-            }
-        } catch (err) {
-            console.error('Error creating Shopify cart:', err);
-            const errorMessage = err instanceof Error ? err.message : 'Something went wrong';
-            setError(errorMessage);
-            toast.error('Error', {
-                description: err instanceof Error ? err.message : 'Failed to process order'
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleNextStep = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Check if at least one lyric has been modified
+        console.log("handleNextStep triggered, currentStep:", currentStep); // Debug step
+
         const hasChanges = lyrics.some((line) => line.modified !== line.original);
 
         if (!hasChanges) {
@@ -510,35 +464,34 @@ function ChangeLyricsPageContent() {
             return;
         }
 
-        if (validateForm()) {
-            try {
-                await createShopifyCart(); // Await the cart creation
-
-                if (currentStep < 4) {
-                    const nextStep = currentStep + 1;
-                    setCurrentStep(nextStep);
-
-                    localStorage.setItem('currentStep', nextStep.toString());
-                    localStorage.setItem('lyrics', JSON.stringify(lyrics));
-                    localStorage.setItem('specialRequests', specialRequests);
-                    localStorage.setItem('formValues', JSON.stringify(formValues));
-                    localStorage.setItem('cost', cost.toString());
-                    router.push("/review");
-                }
-            } catch (err) {
-                console.error('Error during next step:', err);
-                toast.error('Error', {
-                    description: 'Failed to create cart. Please try again.',
-                });
-            }
-        } else {
+        if (!validateForm()) {
             const firstError = Object.values(formErrors)[0];
             toast.error('Invalid input', {
                 description: firstError || 'Please fix the errors in the form',
             });
+            return;
+        }
+
+        try {
+            // Store state in localStorage
+            console.log("Storing data in localStorage..."); // Debug storage
+            localStorage.setItem('lyrics', JSON.stringify(lyrics));
+            localStorage.setItem('cost', cost.toString());
+            localStorage.setItem('currentStep', (currentStep + 1).toString());
+            localStorage.setItem('specialRequests', specialRequests);
+            localStorage.setItem('formValues', JSON.stringify(formValues));
+            localStorage.setItem('deliveryOption', 'Standard Delivery');
+
+            console.log("Navigating to /review, new currentStep:", currentStep + 1); // Debug navigation
+            setCurrentStep(currentStep + 1);
+            router.push("/review");
+        } catch (err) {
+            console.error('Error during next step:', err);
+            toast.error('Error', {
+                description: 'Failed to save data. Please try again.',
+            });
         }
     };
-
 
 
     // Define step data

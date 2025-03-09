@@ -2,18 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Shopify credentials (server-side only)
 const SHOPIFY_STOREFRONT_API_TOKEN = process.env.SHOPIFY_STOREFRONT_API_TOKEN!;
-const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || 'your-store.myshopify.com';
-const CUSTOM_LYRICS_PRODUCT_ID = process.env.CUSTOM_LYRICS_PRODUCT_ID || 'gid://shopify/ProductVariant/123456789';
+const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
+const CUSTOM_LYRICS_PRODUCT_ID = process.env.CUSTOM_LYRICS_PRODUCT_ID;
 
 // Interface for the request payload
 interface CartRequest {
     sessionId: string;
     price: number; // Price in dollars (e.g., 10.00)
+    name?: string; // Optional buyer email
     email?: string; // Optional buyer email
     songName?: string; // Optional song name
     artist?: string; // Optional artist name
     songUrl?: string; // Optional song URL (fallback if name/artist not provided)
     deliveryType: 'standard' | 'rush'; // Delivery type (standard or rush)
+    lyrics: { original: string; modified: string }[]; // Add lyrics array
 }
 
 type ShopifyError = {
@@ -21,20 +23,19 @@ type ShopifyError = {
     message: string;
 };
 
-
-// POST handler to create a Shopify cart with all required information
+// POST handler to create a Shopify checkout session
 export async function POST(request: NextRequest) {
     try {
         // Parse request body
-        const { sessionId, price, email, songName, artist, songUrl, deliveryType }: CartRequest = await request.json();
+        const { sessionId, price, email, songName, artist, songUrl, deliveryType, lyrics }: CartRequest = await request.json();
 
         // Validate required fields
-        if (!sessionId || price == null || !deliveryType) {
+        if (!sessionId || price == null || !deliveryType || !lyrics) {
             return NextResponse.json(
                 {
                     success: false,
                     error: 'Missing required parameters',
-                    userMessage: 'Please provide session ID, price, and delivery type.',
+                    userMessage: 'Please provide session ID, price, delivery type, and lyrics.',
                 },
                 { status: 400 }
             );
@@ -43,16 +44,17 @@ export async function POST(request: NextRequest) {
         // Prepare attributes array
         const attributes = [
             { key: 'sessionId', value: sessionId },
-            { key: 'deliveryType', value: deliveryType }
+            { key: 'deliveryType', value: deliveryType },
+            { key: 'songName', value: songName || 'Not specified' },
+            { key: 'artist', value: artist || 'Not specified' },
+            ...(songUrl ? [{ key: 'songUrl', value: songUrl }] : []),
+            // Add original and modified lyrics as attributes
+            ...lyrics.map((line, index) => ({
+                key: `Line ${index + 1}`,
+                value: `Original: ${line.original} → Modified: ${line.modified}`,
+            })),
         ];
 
-        // Add song information to attributes
-        if (songName && artist) {
-            attributes.push({ key: 'songName', value: songName });
-            attributes.push({ key: 'artist', value: artist });
-        } else if (songUrl) {
-            attributes.push({ key: 'songUrl', value: songUrl });
-        }
 
         // Define cart line item for "Lyric Changer"
         const lineItems = [
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
             },
         ];
 
-        // GraphQL mutation to create cart
+        // GraphQL mutation to create cart (unchanged)
         const createCartQuery = `
             mutation createCart($cartInput: CartInput!) {
                 cartCreate(input: $cartInput) {
