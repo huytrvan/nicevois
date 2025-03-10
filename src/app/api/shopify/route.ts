@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
             lineItems: [{
                 quantity: 1,
                 title: itemTitle,
-                originalUnitPrice: "0.00", // Standardized format
+                originalUnitPrice: String(price.toFixed(2)), // Standardized format
                 customAttributes: [
                     { key: "Priority", value: deliveryType === 'rush' ? "Rush Delivery (1 day)" : "Normal Delivery (2-7 days)" },
                     { key: "Words changed", value: wordChanged.toString() },
