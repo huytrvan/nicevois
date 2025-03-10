@@ -1,106 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as cheerio from 'cheerio';
 
-const GENIUS_API_KEY = process.env.GENIUS_API_KEY;
+const GENIUS_BEARER = process.env.GENIUS_BEARER;
 
 const allowedOrigins = [
     'http://localhost:3000',
-    'https://yourproductiondomain.com'
+    'https://evjbcx-s0.myshopify.com',
+    'https://nv-prod.vercel.app',
+    'https://your-app.vercel.app', // Add your Vercel deployment URL
 ];
-
-// Define a type for mock lyrics
-interface LyricData {
-    id: number;
-    title: string;
-    artist: string;
-    album: string;
-    lyrics: string;
-}
-
-// Mock data for lyrics
-const mockLyrics: Record<string, LyricData> = {
-    "800688": {
-        id: 800688,
-        title: "The Hills",
-        artist: "The Weeknd",
-        album: "Beauty Behind the Madness",
-        lyrics: "[Mock lyrics for The Hills]"
-    },
-    "12345": {
-        id: 12345,
-        title: "Reptilia",
-        artist: "The Strokes",
-        album: "Room on Fire",
-        lyrics: `He seemed impressed by the way you came in
-"Tell us a story, I know you're not boring"
-I was afraid that you would not insist
-"You sound so sleepy, just take this, now leave me"
-I said: "Please don't slow me down if I'm going too fast"
-You're in a strange part of our town
-Yeah, the night's not over
-You're not trying hard enough
-Our lives are changing lanes
-You ran me off the road
-The wait is over
-I'm now taking over
-You're no longer laughing
-I'm not drowning fast enough
-Now every time that I look at myself
-"I thought I told you, this world is not for you"
-The room is on fire as she's fixing her hair
-"You sound so angry, just calm down you found me"
-I said: "Please don't slow me down if I'm going too fast"
-You're in a strange part of our town
-Yeah, the night's not over
-You're not trying hard enough
-Our lives are changing lanes
-You ran me off the road
-The wait is over
-I'm now taking over
-You're no longer laughing
-I'm not drowning fast enough`
-    },
-};
 
 export async function GET(req: NextRequest) {
     const songId = req.nextUrl.searchParams.get('id');
 
     if (!songId) {
-        console.error("Missing required parameter: id");
+        console.error('Missing required parameter: id');
         return new NextResponse(
             JSON.stringify({ error: 'The "id" parameter is required' }),
             { status: 400, headers: corsHeaders(req) }
         );
     }
 
-    // Check if we have mock data for this song
-    if (mockLyrics[songId]) {
+    if (!GENIUS_BEARER) {
+        console.warn('GENIUS_BEARER is missing');
         return new NextResponse(
-            JSON.stringify(mockLyrics[songId]),
-            { status: 200, headers: corsHeaders(req) }
-        );
-    }
-
-    if (!GENIUS_API_KEY) {
-        console.warn("GENIUS_API_KEY is missing");
-        return new NextResponse(
-            JSON.stringify({ error: 'API key not configured' }),
+            JSON.stringify({ error: 'API key not configured on server' }),
             { status: 500, headers: corsHeaders(req) }
         );
     }
 
     try {
-        // Fetch song details from Genius
-        const songResponse = await fetch(
-            `https://api.genius.com/songs/${songId}`,
-            {
-                headers: { Authorization: `Bearer ${GENIUS_API_KEY}` },
-            }
-        );
+        const songResponse = await fetch(`https://api.genius.com/songs/${songId}`, {
+            headers: {
+                Authorization: `Bearer ${GENIUS_BEARER}`,
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                Referer: 'https://www.google.com/',
+            },
+        });
 
         if (!songResponse.ok) {
             console.error(`Genius API request failed: ${songResponse.status}`);
             return new NextResponse(
-                JSON.stringify({ error: 'Failed to fetch song data from Genius API' }),
+                JSON.stringify({ error: `Genius API error: ${songResponse.statusText}` }),
                 { status: songResponse.status, headers: corsHeaders(req) }
             );
         }
@@ -115,52 +57,86 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        // Fetch lyrics from the new API endpoint
-        const lyricsResponse = await fetch(
-            `${process.env.BASE_URL}/api/genius/lyric?track_name=${song.id}`
-        );
-
-        if (!lyricsResponse.ok) {
-            console.error(`Lyrics API request failed: ${lyricsResponse.status}`);
-            return new NextResponse(
-                JSON.stringify({
-                    id: song.id,
-                    title: song.title,
-                    artist: song.primary_artist.name,
-                    album: song.album?.name || "Unknown Album",
-                    lyrics: 'Lyrics not found',
-                }),
-                { status: 200, headers: corsHeaders(req) }
-            );
-        }
-
-        const lyricsData = await lyricsResponse.json();
+        const lyrics = await fetchLyricsFromGenius(song.url);
 
         return new NextResponse(
             JSON.stringify({
                 id: song.id,
                 title: song.title,
                 artist: song.primary_artist.name,
-                album: song.album?.name || "Unknown Album",
-                lyrics: lyricsData.lyrics,
+                image: song.song_art_image_url,
+                album: song.album?.name || 'Unknown Album',
+                lyrics,
             }),
             { status: 200, headers: corsHeaders(req) }
         );
-    } catch (error) {
-        console.error("Unexpected error:", error);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Unexpected error:', error);
         return new NextResponse(
-            JSON.stringify({ error: 'Internal Server Error' }),
+            JSON.stringify({ error: 'Internal Server Error', details: errorMessage }),
             { status: 500, headers: corsHeaders(req) }
         );
     }
 }
 
-// CORS Handling
+async function fetchLyricsFromGenius(url: string): Promise<string> {
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Bearer ${GENIUS_BEARER}`,
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                Referer: 'https://www.google.com/',
+            },
+        });
+
+        if (!response.ok) {
+            console.error(`Failed to fetch lyrics page: ${response.status}`);
+            return 'Lyrics not found';
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        let lyricsText = '';
+
+        const lyricsContainers = $('[data-lyrics-container="true"]');
+        if (lyricsContainers.length > 0) {
+            lyricsContainers.each((_, element) => {
+                const container = $(element);
+                const html = container.html() || '';
+                const text = html
+                    .replace(/<br\s*\/?>/g, '\n')
+                    .replace(/<(?:.|\n)*?>/gm, '');
+                lyricsText += text + '\n\n';
+            });
+        } else if ($('.lyrics').length > 0) {
+            lyricsText = $('.lyrics').text().trim();
+        } else if ($('.song_body-lyrics').length > 0) {
+            lyricsText = $('.song_body-lyrics').text().trim();
+        }
+
+        lyricsText = lyricsText
+            .trim()
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/\[/g, '\n[')
+            .replace(/\n\s+/g, '\n')
+            .trim();
+
+        return lyricsText || 'Lyrics not found';
+    } catch (error) {
+        console.error('Error fetching lyrics:', error);
+        return 'Error fetching lyrics';
+    }
+}
+
 function corsHeaders(req: NextRequest): Record<string, string> {
     const origin = req.headers.get('origin');
     const allowedOrigin = allowedOrigins.includes(origin || '')
         ? origin
-        : process.env.NODE_ENV === 'development' ? '*' : '';
+        : process.env.NODE_ENV === 'development'
+            ? '*'
+            : '';
 
     return {
         'Content-Type': 'application/json',
@@ -169,3 +145,7 @@ function corsHeaders(req: NextRequest): Record<string, string> {
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
 }
+
+export const config = {
+    runtime: 'nodejs', // Ensure Node.js runtime (default for Next.js API routes)
+};

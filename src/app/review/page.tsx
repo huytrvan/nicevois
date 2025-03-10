@@ -138,6 +138,7 @@ function OrderReviewPageContent() {
             const lyricsChanges = lyrics
                 .filter(line => line.modified !== line.original)
                 .map(line => ({
+                    id: line.id,
                     original: line.original,
                     modified: line.modified,
                 }));
@@ -159,6 +160,7 @@ function OrderReviewPageContent() {
                 songUrl: songUrl || undefined,
                 deliveryType,
                 lyrics: lyricsChanges,
+                specialRequests: specialRequests
             };
 
             const response = await fetch("/api/shopify", {
