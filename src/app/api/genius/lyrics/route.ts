@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         // Encode parameters to handle special characters
         const encodedTrack = encodeURIComponent(trackName);
         const encodedArtist = encodeURIComponent(artistName);
+        console.log(`https://lyricchanger.vercel.app/service/genius/lyric?track_name=${encodedTrack}&artist_name=${encodedArtist}`);
 
         const response = await fetch(
             `https://lyricchanger.vercel.app/service/genius/lyric?track_name=${encodedTrack}&artist_name=${encodedArtist}`,
@@ -93,7 +94,3 @@ function corsHeaders(req: NextRequest): Record<string, string> {
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
 }
-
-export const config = {
-    runtime: 'edge', // Changed to edge runtime for better performance
-};
