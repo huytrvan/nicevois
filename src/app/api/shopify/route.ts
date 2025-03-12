@@ -277,12 +277,12 @@ export async function POST(request: NextRequest) {
             key: "* Priority",
             value: deliveryType === 'rush' ? "Rush Delivery (1 business day)" : "Normal Delivery (2-7 business days)"
         });
-        if (songName) _customAttributes.push({ key: "* Song Name", value: songName });
-        if (artist) _customAttributes.push({ key: "* Song Artist", value: artist });
+        if (songName) _customAttributes.push({ key: "* Song", value: songName });
+        if (artist) _customAttributes.push({ key: "* Artist", value: artist });
         if (songUrl) _customAttributes.push({ key: "* Song URL", value: songUrl });
         _customAttributes.push({
             key: "* Lyrics Change",
-            value: `\n(Word changes: ${wordChanged})\n${formattedLyricsChanges}`
+            value: `\n(Word changes: ${wordChanged} word${wordChanged !== 1 ? 's' : ''})\n${formattedLyricsChanges}`
         });
         if (specialRequests) _customAttributes.push({ key: "* Special Requests", value: `"${specialRequests}"` });
         _customAttributes.push({
