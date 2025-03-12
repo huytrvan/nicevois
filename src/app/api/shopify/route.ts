@@ -233,15 +233,15 @@ export async function POST(request: NextRequest) {
             .join("\n") || "No lyrics changes specified";
 
 
-        const customAttributes = [
-            { key: 'Order Id', value: sessionId },
-            { key: 'Delivery Type', value: deliveryType === 'rush' ? "Rush Delivery (1 day)" : "Standard Delivery (2-7 days)" },
-            { key: 'Song Name', value: songName || 'Not specified' },
-            { key: 'Artist', value: artist || 'Not specified' },
-            { key: 'Song Url', value: songUrl || 'Not specified' },
-            { key: 'Special Requests', value: specialRequests || 'Not specified' },
-            { key: 'Song Image', value: songImage || 'Not specified' },
-        ];
+        // const customAttributes = [
+        //     { key: 'Order Id', value: sessionId },
+        //     { key: 'Delivery Type', value: deliveryType === 'rush' ? "Rush Delivery (1 day)" : "Standard Delivery (2-7 days)" },
+        //     { key: 'Song Name', value: songName || 'Not specified' },
+        //     { key: 'Artist', value: artist || 'Not specified' },
+        //     { key: 'Song Url', value: songUrl || 'Not specified' },
+        //     { key: 'Special Requests', value: specialRequests || 'Not specified' },
+        //     { key: 'Song Image', value: songImage || 'Not specified' },
+        // ];
 
         const createDraftOrderQuery = `
             mutation draftOrderCreate($input: DraftOrderInput!) {
@@ -299,8 +299,8 @@ export async function POST(request: NextRequest) {
                 customAttributes: _customAttributes,
                 taxable: false
             }],
-            customAttributes,
-            note: `Lyrics change:\n(${wordChanged} word${wordChanged !== 1 ? 's' : ''})\n${formattedLyricsChanges}`,
+            // customAttributes,
+            // note: `Lyrics change:\n(${wordChanged} word${wordChanged !== 1 ? 's' : ''})\n${formattedLyricsChanges}`,
             tags: [`${deliveryType}-delivery`, "custom-lyrics"],
             shippingLine: {
                 title: "Digital Delivery",
@@ -308,7 +308,6 @@ export async function POST(request: NextRequest) {
             },
             taxExempt: true,
         };
-        console.log(draftOrderInput);
 
         const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}.myshopify.com/admin/api/2025-01/graphql.json`, {
             method: 'POST',
