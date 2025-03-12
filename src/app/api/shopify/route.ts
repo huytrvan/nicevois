@@ -166,13 +166,20 @@ export async function POST(request: NextRequest) {
         if (sessionId) _customAttributes.push({ key: "* Order ID", value: sessionId });
         _customAttributes.push({
             key: "* Priority",
-            value: deliveryType === 'rush' ? "Rush Delivery (1 day)" : "Normal Delivery (2-7 days)"
+            value: deliveryType === 'rush' ? "Rush Delivery (1 business day)" : "Normal Delivery (2-7 business days)"
         });
         if (songName) _customAttributes.push({ key: "* Song Name", value: songName });
         if (artist) _customAttributes.push({ key: "* Song Artist", value: artist });
         if (songUrl) _customAttributes.push({ key: "* Song URL", value: songUrl });
-        if (wordChanged) _customAttributes.push({ key: "* Words Changed", value: wordChanged.toString() });
-        if (specialRequests) _customAttributes.push({ key: "* Special Requests", value: specialRequests });
+        _customAttributes.push({
+            key: "* Lyrics Change",
+            value: `\n(Word changes: ${wordChanged})\n${formattedLyricsChanges}`
+        });
+        if (specialRequests) _customAttributes.push({ key: "* Special Requests", value: `"${specialRequests}"` });
+        _customAttributes.push({
+            key: "* Order Status",
+            value: deliveryType === 'rush' ? "We will update you via your email (1 day)" : "We will update you via your email (2-7 days)"
+        });
         if (songImage) _customAttributes.push({ key: "* Song Image", value: songImage });
 
         const draftOrderInput = {
