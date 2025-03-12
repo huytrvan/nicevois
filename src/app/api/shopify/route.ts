@@ -10,6 +10,7 @@ interface CartRequest {
     wordChanged: number;
     songName?: string;
     artist?: string;
+    songImage: string;
     songUrl?: string;
     deliveryType: 'standard' | 'rush';
     lyrics: { id: number, original: string; modified: string }[];
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { sessionId, price, wordChanged, songName, artist, songUrl, deliveryType, lyrics, specialRequests } = body;
+        const { sessionId, price, wordChanged, songName, artist, songImage, songUrl, deliveryType, lyrics, specialRequests } = body;
 
         // Enhanced validation
         if (!sessionId || typeof price !== 'number' || !Number.isFinite(price) || price < 0 ||
@@ -115,7 +116,9 @@ export async function POST(request: NextRequest) {
             { key: 'Song Name', value: songName || 'Not specified' },
             { key: 'Artist', value: artist || 'Not specified' },
             { key: 'Song Url', value: songUrl || 'Not specified' },
-            { key: 'Special Requests', value: specialRequests || 'Not specified' }
+            { key: 'Special Requests', value: specialRequests || 'Not specified' },
+            { key: 'Song Url', value: songUrl || 'Not specified' },
+            { key: 'Song Image', value: songImage || 'Not specified' },
         ];
 
         const createDraftOrderQuery = `
