@@ -1,3 +1,4 @@
+// src\app\change-lyrics\page.tsx
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -12,220 +13,8 @@ import { Toaster, toast } from 'sonner';
 import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
 import BackButton from '@/components/BackButton';
 import Image from 'next/image';
+import { handleReplaceAll, handleResetLyrics, handleLyricChange, LyricLine, countChangedWords, generateLyricsData } from './utils';
 
-// src/app/change-lyrics/page.tsx
-// Type definitions
-interface WordChange {
-    originalWord: string;
-    newWord: string;
-    originalIndex: number;
-    newIndex: number;
-    hasChanged: boolean;
-    isTransformation?: boolean; // Added optional property
-}
-
-type LyricLine = {
-    id: number;
-    original: string;
-    modified: string;
-    markedText?: string;
-    wordChanges: WordChange[];
-};
-
-// Utility functions
-function escapeRegExp(string: string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-function calculateWordChanges(original: string, modified: string): WordChange[] {
-    const normalizeText = (text: string) => {
-        return text.replace(/[\n\r]+/g, ' ')
-            .trim()
-            .replace(/\s+/g, ' ');
-    };
-
-    const normalizedOriginal = normalizeText(original || '');
-    const normalizedModified = normalizeText(modified || '');
-
-    // If texts are identical, return empty array
-    if (normalizedOriginal === normalizedModified) {
-        return [];
-    }
-
-    // Split into words (preserve punctuation by keeping it with words)
-    const originalWords = normalizedOriginal.split(/\s+/).filter(word => word.length > 0);
-    const modifiedWords = normalizedModified.split(/\s+/).filter(word => word.length > 0);
-
-    if (originalWords.length === 0 && modifiedWords.length === 0) {
-        return [];
-    }
-
-    // Compute diff using Myers algorithm approach with a simplified implementation
-    const changes: WordChange[] = [];
-
-    // We'll use dynamic programming to find the longest common subsequence (LCS)
-    // This will help us identify unchanged words
-    const lcs = findLongestCommonSubsequence(originalWords, modifiedWords);
-
-    // Use the LCS to identify changes
-    let origPos = 0;
-    let modPos = 0;
-    let lcsPos = 0;
-
-    while (origPos < originalWords.length || modPos < modifiedWords.length) {
-        // Case 1: Word is unchanged (part of LCS)
-        if (lcsPos < lcs.length &&
-            origPos < originalWords.length &&
-            modPos < modifiedWords.length &&
-            originalWords[origPos] === lcs[lcsPos] &&
-            modifiedWords[modPos] === lcs[lcsPos]) {
-
-            changes.push({
-                originalWord: originalWords[origPos],
-                newWord: modifiedWords[modPos],
-                originalIndex: origPos,
-                newIndex: modPos,
-                hasChanged: false
-            });
-
-            origPos++;
-            modPos++;
-            lcsPos++;
-            continue;
-        }
-
-        if (origPos < originalWords.length && modPos < modifiedWords.length) {
-            const originalWithoutPunctuation = originalWords[origPos].replace(/[.,()[\]{}:;!?-]+/g, '').toLowerCase();
-            const modifiedWithoutPunctuation = modifiedWords[modPos].replace(/[.,()[\]{}:;!?-]+/g, '').toLowerCase();
-
-            // If only punctuation is different, mark as unchanged
-            if (originalWithoutPunctuation === modifiedWithoutPunctuation && originalWithoutPunctuation.length > 0) {
-                changes.push({
-                    originalWord: originalWords[origPos],
-                    newWord: modifiedWords[modPos],
-                    originalIndex: origPos,
-                    newIndex: modPos,
-                    hasChanged: false // Mark as unchanged since only punctuation differs
-                });
-
-                origPos++;
-                modPos++;
-                continue;
-            }
-        }
-
-        // Case 2: Words in both texts, but don't match - likely a replacement
-        if (origPos < originalWords.length && modPos < modifiedWords.length) {
-            // Check if next words match to confirm this is a simple replacement
-            const isSimpleReplacement =
-                (origPos + 1 < originalWords.length &&
-                    modPos + 1 < modifiedWords.length &&
-                    originalWords[origPos + 1] === modifiedWords[modPos + 1]) ||
-                // Or if we're at the end of both sequences
-                (origPos === originalWords.length - 1 && modPos === modifiedWords.length - 1);
-
-            if (isSimpleReplacement) {
-                changes.push({
-                    originalWord: originalWords[origPos],
-                    newWord: modifiedWords[modPos],
-                    originalIndex: origPos,
-                    newIndex: modPos,
-                    hasChanged: true
-                });
-
-                origPos++;
-                modPos++;
-                continue;
-            }
-        }
-
-        // Case 3: Word was deleted from original
-        if (origPos < originalWords.length &&
-            (modPos >= modifiedWords.length ||
-                !modifiedWords.includes(originalWords[origPos]) ||
-                lcsPos < lcs.length && originalWords[origPos] !== lcs[lcsPos])) {
-
-            changes.push({
-                originalWord: originalWords[origPos],
-                newWord: '',
-                originalIndex: origPos,
-                newIndex: modPos,
-                hasChanged: true
-            });
-
-            origPos++;
-            continue;
-        }
-
-        // Case 4: Word was added in modified
-        if (modPos < modifiedWords.length) {
-            changes.push({
-                originalWord: '',
-                newWord: modifiedWords[modPos],
-                originalIndex: origPos > 0 ? origPos - 1 : 0,
-                newIndex: modPos,
-                hasChanged: true
-            });
-
-            modPos++;
-            continue;
-        }
-    }
-
-    return changes;
-}
-
-function findLongestCommonSubsequence(arr1: string[], arr2: string[]): string[] {
-    const dp: number[][] = Array(arr1.length + 1)
-        .fill(null)
-        .map(() => Array(arr2.length + 1).fill(0));
-
-    // Fill the dp table
-    for (let i = 1; i <= arr1.length; i++) {
-        for (let j = 1; j <= arr2.length; j++) {
-            if (arr1[i - 1] === arr2[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1] + 1;
-            } else {
-                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-            }
-        }
-    }
-
-    // Backtrack to find the sequence
-    const result: string[] = [];
-    let i = arr1.length;
-    let j = arr2.length;
-
-    while (i > 0 && j > 0) {
-        if (arr1[i - 1] === arr2[j - 1]) {
-            result.unshift(arr1[i - 1]);
-            i--;
-            j--;
-        } else if (dp[i - 1][j] > dp[i][j - 1]) {
-            i--;
-        } else {
-            j--;
-        }
-    }
-
-    return result;
-}
-
-
-function generateLyricsData(text: string): LyricLine[] {
-    // Remove leading/trailing newlines and normalize line endings
-    const cleanedText = text.replace(/^[\n\r]+|[\n\r]+$/g, '').replace(/\r\n|\r/g, '\n');
-    const lines = cleanedText
-        .split('\n')
-        .filter(line => line.trim().length > 0)
-        .map((line, index) => ({
-            id: index + 1,
-            text: line.trim(),
-            original: line.trim(),
-            modified: line.trim(),
-            wordChanges: [],
-        }));
-    return lines;
-}
 
 // Create a wrapper component that uses useSearchParams
 function ChangeLyricsPageContent() {
@@ -258,40 +47,6 @@ function ChangeLyricsPageContent() {
     // Constants
     const BASE_COST = 35;
     const ADDITIONAL_COST_PER_CHANGE = 5;
-
-    // Calculate total word changes
-    function countChangedWords(line: LyricLine): number {
-        let changedWordCount = 0;
-
-        // Track positions to avoid double-counting substitutions and deletions
-        const countedOriginalPositions = new Set<number>();
-
-        // Process each change in the line
-        line.wordChanges.forEach(change => {
-            if (!change.hasChanged) return; // Skip unchanged words
-
-            if (change.originalWord && change.newWord) {
-                // Substitution: Count only if this original position hasn't been counted
-                if (!countedOriginalPositions.has(change.originalIndex)) {
-                    changedWordCount++;
-                    countedOriginalPositions.add(change.originalIndex);
-                }
-            } else if (change.originalWord && !change.newWord) {
-                // Deletion: Always count, using originalIndex to track
-                if (!countedOriginalPositions.has(change.originalIndex)) {
-                    changedWordCount++;
-                    countedOriginalPositions.add(change.originalIndex);
-                }
-            } else if (!change.originalWord && change.newWord) {
-                // Insertion: Each insertion is a separate change
-                changedWordCount++;
-                // No need to track position for insertions, as each is unique by definition
-            }
-        });
-
-        return changedWordCount;
-    }
-
 
     // Updated totalWordChanges calculation
     const totalWordChanges = useMemo(() => {
@@ -450,216 +205,8 @@ function ChangeLyricsPageContent() {
         }
     }, [isManualEntry]); // Run only on mount
 
-    // Improved stripHtmlAndSymbols function
-    const stripHtmlAndSymbols = (text: string) => {
-        // Create a temporary div to parse HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = text;
 
-        // Get plain text content
-        const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
-        // Remove ⌧ symbols completely and trim excess spaces
-        return plainText.replace(/⌧/g, ' ').replace(/\s{2,}/g, ' ').trim();
-    };
-
-    function handleLyricChange(id: number, newText: string) {
-        setLyrics(prevLyrics => {
-            const updatedLyrics = prevLyrics.map(line => {
-                if (line.id !== id) return line;
-
-                // Clean up the input text
-                const sanitizedNewText = stripHtmlAndSymbols(newText);
-
-                // If there's no content after sanitizing, return the line unchanged
-                if (!sanitizedNewText.trim()) {
-                    return line;
-                }
-
-                // Normalize the text to remove extra whitespace
-                const normalizedNewText = sanitizedNewText.replace(/\s{2,}/g, ' ').trim();
-
-                // Calculate word changes by comparing to original
-                const wordChanges = calculateWordChanges(line.original, normalizedNewText);
-
-                // Split the modified text
-                const modifiedWords = normalizedNewText.split(/\s+/).filter(word => word.length > 0);
-
-                // Create a result array with all the words including original and new
-                const result: Array<{ text: string, type: 'unchanged' | 'changed' | 'deleted' }> = [];
-
-                // First add all modified words with their status
-                modifiedWords.forEach((word, index) => {
-                    // Find if this word exists in the changes
-                    const change = wordChanges.find(c =>
-                        c.newIndex === index && c.newWord === word);
-
-                    if (change && change.hasChanged) {
-                        // Check if this is only a punctuation change
-                        const originalWithoutPunctuation = (change.originalWord || '').replace(/[.,()[\]{}:;!?-]+/g, '');
-                        const newWithoutPunctuation = word.replace(/[.,()[\]{}:;!?-]+/g, '');
-
-                        const isPunctuationChangeOnly =
-                            originalWithoutPunctuation.toLowerCase() === newWithoutPunctuation.toLowerCase() &&
-                            originalWithoutPunctuation.length > 0;
-
-                        // If it's only a punctuation change, don't mark it as changed at all
-                        if (isPunctuationChangeOnly) {
-                            result.push({
-                                text: change.originalWord || word,
-                                type: 'unchanged'
-                            });
-                        } else {
-                            result.push({
-                                text: word,
-                                type: 'changed'
-                            });
-                        }
-                    } else {
-                        result.push({
-                            text: word,
-                            type: 'unchanged'
-                        });
-                    }
-                });
-
-                // Handle deletions - add a deletion marker for EACH deleted word
-                const deletions = wordChanges.filter(change =>
-                    change.hasChanged && !change.newWord && change.originalWord
-                );
-
-                // Sort deletions by their original position
-                deletions.sort((a, b) => a.newIndex - b.newIndex);
-
-                // Group deletions by their position to handle multiple consecutive deletes
-                const positionMap = new Map<number, number>();
-
-                deletions.forEach(deletion => {
-                    const position = deletion.newIndex;
-                    positionMap.set(position, (positionMap.get(position) || 0) + 1);
-                });
-
-                // Insert deletion markers for each position
-                Array.from(positionMap.entries()).sort((a, b) => a[0] - b[0]).forEach(([position, count]) => {
-                    // Make sure position is valid
-                    const insertPosition = Math.max(0, Math.min(position, result.length));
-
-                    // Add a deletion marker for each deleted word at this position
-                    for (let i = 0; i < count; i++) {
-                        result.splice(insertPosition, 0, {
-                            text: '⌧',
-                            type: 'deleted'
-                        });
-                    }
-                });
-
-                // Build the marked text with proper HTML
-                const markedText = result.map(item => {
-                    if (item.type === 'deleted') {
-                        return `<span class="text-red-600">⌧</span>`;
-                    } else if (item.type === 'changed') {
-                        return `<span class="text-red-600">${item.text}</span>`;
-                    } else {
-                        return item.text;
-                    }
-                }).join(' ');
-
-                // Build the actual modified text from the result array to ensure it matches what we're displaying
-                const actualModified = result.map(item => item.text).join(' ');
-
-                return {
-                    ...line,
-                    modified: actualModified,
-                    markedText,
-                    wordChanges
-                };
-            });
-
-            // Update form values with joined lyrics
-            setFormValues(prev => ({
-                ...prev,
-                lyrics: updatedLyrics.map(line => line.modified).join('\n')
-            }));
-
-            return updatedLyrics;
-        });
-    }
-
-    const handleReplaceAll = () => {
-        if (!replaceTerm.trim()) {
-            toast.error('Please enter a term to replace');
-            return;
-        }
-
-        setLyrics(prevLyrics => {
-            const updatedLyrics = prevLyrics.map(line => {
-                // Skip processing if the exact word isn't in the line
-                // Using word boundary in regex to match whole words only
-                const wholeWordRegex = new RegExp(`\\b${escapeRegExp(replaceTerm)}\\b`, 'i');
-                if (!wholeWordRegex.test(line.modified)) {
-                    return line;
-                }
-
-                // Replace only whole words that match exactly
-                const newMarked = line.modified.replace(
-                    new RegExp(`\\b${escapeRegExp(replaceTerm)}\\b`, 'gi'),
-                    match => {
-                        // Determine the case pattern of the matched text
-                        let replacementText;
-                        if (match === match.toUpperCase()) {
-                            replacementText = replaceWith.toUpperCase();
-                        } else if (match === match.toLowerCase()) {
-                            replacementText = replaceWith.toLowerCase();
-                        } else if (match[0] === match[0].toUpperCase()) {
-                            replacementText = replaceWith.charAt(0).toUpperCase() +
-                                replaceWith.slice(1).toLowerCase();
-                        } else {
-                            replacementText = replaceWith;
-                        }
-                        return `<span class="text-red-600">${replacementText}</span>`;
-                    }
-                );
-
-                const newModifiedPlain = stripHtmlAndSymbols(newMarked);
-                const wordChanges = calculateWordChanges(line.original, newModifiedPlain);
-
-                // Use the existing handler to process the changes
-                handleLyricChange(line.id, newModifiedPlain);
-
-                return {
-                    ...line,
-                    modified: newModifiedPlain,
-                    markedText: newMarked,
-                    wordChanges
-                };
-            });
-
-            setFormValues(prev => ({
-                ...prev,
-                lyrics: updatedLyrics.map(line => line.modified).join('\n')
-            }));
-
-            return updatedLyrics;
-        });
-
-        toast.success(`Replaced all instances of "${replaceTerm}" with "${replaceWith}"`);
-    };
-    const handleResetLyrics = () => {
-        setLyrics(prevLyrics => {
-            const resetLyrics = prevLyrics.map(line => ({
-                ...line,
-                modified: line.original,
-                markedText: line.original,
-                wordChanges: []
-            }));
-            setFormValues(prev => ({
-                ...prev,
-                lyrics: resetLyrics.map(line => line.modified).join('\n')
-            }));
-            return resetLyrics;
-        });
-        toast.success('Lyrics reset to original version');
-    };
     const validateForm = () => {
         const errors: Record<string, string> = {};
         let isValid = true;
@@ -688,6 +235,7 @@ function ChangeLyricsPageContent() {
         setFormErrors(errors);
         return { isValid, errors }; // Return both the validity and the errors object
     };
+
 
     const handleNextStep = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -827,7 +375,6 @@ function ChangeLyricsPageContent() {
                                                 objectFit="cover"
                                                 className="rounded-lg"
                                                 onError={(e) => {
-                                                    // When error occurs, find and remove the parent container
                                                     const container = document.getElementById('song-image-container');
                                                     if (container) {
                                                         container.style.display = 'none';
@@ -856,7 +403,7 @@ function ChangeLyricsPageContent() {
                             <div className="flex flex-row items-center gap-2 py-0">
                                 <BackButton href="/" />
                                 {!isError && (
-                                    < button
+                                    <button
                                         onClick={handleNextStep}
                                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
                                         type="button"
@@ -935,7 +482,7 @@ function ChangeLyricsPageContent() {
                                                                     <div
                                                                         key={line.modified}
                                                                         contentEditable={true}
-                                                                        onBlur={(e) => handleLyricChange(line.id, e.currentTarget.textContent || '')}
+                                                                        onBlur={(e) => handleLyricChange(line.id, e.currentTarget.textContent || '', setLyrics, setFormValues)}
                                                                         suppressContentEditableWarning={true}
                                                                         dangerouslySetInnerHTML={{ __html: line.markedText || line.modified }}
                                                                         className="outline-none p-1 rounded hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
@@ -956,11 +503,12 @@ function ChangeLyricsPageContent() {
                                     {/* Reset Button */}
                                     <button
                                         type="button"
-                                        onClick={handleResetLyrics}
+                                        onClick={() => handleResetLyrics(setLyrics, setFormValues, toast)}
                                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-blue-200 text-blue-900 hover:text-blue-200 hover:bg-blue-900 hover:ring-blue-500/50 focus-visible:ring focus-visible:ring-blue-500/50 active:bg-blue-700 active:ring-0 px-5 rounded-t-none rounded-b-md text-sm md:text-base h-10 md:h-12 w-full -mt-4"
                                     >
-                                        <Eraser className='w-4 h-4 opacity-85' /> Reset to Original Lyrics
+                                        <Eraser className="w-4 h-4 opacity-85" /> Reset to Original Lyrics
                                     </button>
+
 
                                     {/* Replace Section */}
                                     <div className="mt-2 flex flex-col gap-2 w-full">
@@ -984,7 +532,7 @@ function ChangeLyricsPageContent() {
                                             />
                                             <button
                                                 type="button"
-                                                onClick={handleReplaceAll}
+                                                onClick={() => handleReplaceAll(replaceTerm, replaceWith, setLyrics, setFormValues, toast)}
                                                 className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md text-sm md:text-base h-10 md:h-12 w-full sm:w-auto"
                                             >
                                                 Replace All
@@ -1036,7 +584,7 @@ function ChangeLyricsPageContent() {
                     </Tabs.Root>
                 </section>
             </div>
-        </main >
+        </main>
     );
 }
 
