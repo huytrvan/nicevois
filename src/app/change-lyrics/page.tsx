@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ChevronRight, ListMusic, ArrowRight, Eraser } from 'lucide-react';
+import { ChevronRight, ListMusic, ArrowRight, Eraser, ExternalLink } from 'lucide-react';
 import React from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
@@ -13,7 +13,7 @@ import { Toaster, toast } from 'sonner';
 import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
 import BackButton from '@/components/BackButton';
 import Image from 'next/image';
-import { handleReplaceAll, handleResetLyrics, handleLyricChange, LyricLine, countChangedWords, generateLyricsData } from './utils';
+import { handleReplaceAll, handleResetLyrics, handleLyricChange, handleResetLine, LyricLine, countChangedWords, generateLyricsData } from './utils';
 
 
 // Create a wrapper component that uses useSearchParams
@@ -44,10 +44,13 @@ function ChangeLyricsPageContent() {
     });
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-    // Constants
-    const BASE_COST = 35;
-    const ADDITIONAL_COST_PER_CHANGE = 5;
-
+    const calculateCost = (wordChanges: number): number => {
+        if (wordChanges <= 0) return 0;
+        if (wordChanges <= 3) return 45;
+        if (wordChanges <= 10) return 85;
+        if (wordChanges <= 20) return 125;
+        return 165;
+    };
     // Updated totalWordChanges calculation
     const totalWordChanges = useMemo(() => {
         return lyrics.reduce((sum, line) => {
@@ -56,7 +59,7 @@ function ChangeLyricsPageContent() {
     }, [lyrics]);
 
     // Calculate cost
-    const [cost, setCost] = useState(BASE_COST);
+    const [cost, setCost] = useState(0);
     useEffect(() => {
         // Only run if song details are not already set (e.g., from URL params)
         if (!songId && !songTitle && !songArtist && !songImage) {
@@ -80,8 +83,7 @@ function ChangeLyricsPageContent() {
 
     // Update cost whenever word changes are modified
     useEffect(() => {
-        const additionalChanges = Math.max(0, totalWordChanges - 1); // First change is free
-        setCost(BASE_COST + additionalChanges * ADDITIONAL_COST_PER_CHANGE);
+        setCost(calculateCost(totalWordChanges));
         setIsError(false);
     }, [totalWordChanges]);
 
@@ -243,7 +245,7 @@ function ChangeLyricsPageContent() {
             line.wordChanges && line.wordChanges.some(change => change.hasChanged)
         );
         if (!hasChanges) {
-            toast.error('No changes made', {
+            toast.error('Unable to proceed: No changes were made.', {
                 description: 'Please modify at least one lyric before proceeding.',
             });
             return;
@@ -303,6 +305,22 @@ function ChangeLyricsPageContent() {
         { step: 2, label: "Change Lyrics", isActive: currentStep === 2, isComplete: currentStep > 2 },
         { step: 3, label: "Review Order", isActive: currentStep === 3, isComplete: false },
     ];
+    const NavigationBtn = () => (
+        <div className="flex flex-row items-center gap-2 py-0">
+            <BackButton href="/" />
+            {!isError && (
+                <button
+                    onClick={handleNextStep}
+                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
+                    type="button"
+                >
+                    Change the Lyrics ${cost} <ChevronRight className="-mr-1 size-4 md:size-5" />
+                </button>
+            )}
+        </div>
+    );
+
+
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
@@ -400,18 +418,7 @@ function ChangeLyricsPageContent() {
                             )}
 
                             {/* Navigation Buttons */}
-                            <div className="flex flex-row items-center gap-2 py-0">
-                                <BackButton href="/" />
-                                {!isError && (
-                                    <button
-                                        onClick={handleNextStep}
-                                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
-                                        type="button"
-                                    >
-                                        Change the Lyrics ${cost} <ChevronRight className="-mr-1 size-4 md:size-5" />
-                                    </button>
-                                )}
-                            </div>
+                            <NavigationBtn />
 
                             <Separator.Root
                                 className="shrink-0 dark:bg-gray-100/5 h-[1.5px] w-full my-3 md:my-4 bg-primary/10"
@@ -428,24 +435,51 @@ function ChangeLyricsPageContent() {
                             {/* Lyrics cost info */}
                             {!isLoading && (
                                 <div
-                                    className="relative w-full rounded-lg p-4 dark:border-gray-100/5 bg-primary/80 text-white/80"
+                                    className="relative w-full rounded-lg p-5 bg-primary/80 text-white shadow-md"
                                     role="alert"
                                 >
-                                    <div className="flex flex-col gap-2">
-                                        <div className="scroll-m-20 font-roboto font-normal tracking-wide dark:text-white text-inherit text-sm md:text-base md:leading-6">
-                                            <span className="my-1.5 flex flex-row gap-1">
-                                                <ListMusic className="-mt-0.5 mr-1 size-4 md:size-5 md:mt-0.5" />
-                                                <span>
-                                                    <strong>Pricing Summary</strong> <br />
-                                                    <span>First-word Change: <strong>${BASE_COST}</strong></span> <br />
-                                                    <span>Additional Changes: <strong>{Math.max(0, totalWordChanges - 1)} × ${ADDITIONAL_COST_PER_CHANGE} = ${Math.max(0, totalWordChanges - 1) * ADDITIONAL_COST_PER_CHANGE}</strong></span> <br />
-                                                    <div className="text-base md:text-lg border-t border-white/20 mt-2 pt-2">
-                                                        <span>
-                                                            <strong>Total: ${cost}</strong> <span>({totalWordChanges} word{totalWordChanges > 1 ? 's' : ''})</span>
-                                                        </span>
-                                                    </div>
-                                                </span>
-                                            </span>
+                                    <div className="flex flex-col gap-3">
+                                        {/* Header */}
+                                        <div className="flex items-center gap-2 border-b border-white/20 pb-3">
+                                            <ListMusic className="size-5" />
+                                            <h3 className="text-lg font-bold">Pricing Summary</h3>
+                                        </div>
+
+                                        {/* Current Order */}
+                                        <div className="bg-blue-900/40 rounded-md p-3 mb-2">
+                                            <p>Words Changed: {totalWordChanges}</p>
+                                            <p className='mt-2'>Total Cost:<span className="text-lg font-bold"> ${cost}</span></p>
+                                        </div>
+
+                                        {/* Pricing Tiers */}
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Pricing (based on distinct words, case-insensitive)</h4>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                                                <div className={`flex flex-col p-3  ${totalWordChanges <= 3 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                    <span className="text-sm text-white/90">1-3 words</span>
+                                                    <span className="font-bold">$45</span>
+                                                </div>
+                                                <div className={`flex flex-col p-3 ${totalWordChanges > 3 && totalWordChanges <= 10 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                    <span className="text-sm text-white/90">4-10 words</span>
+                                                    <span className="font-bold">$85</span>
+                                                </div>
+                                                <div className={`flex flex-col p-3 ${totalWordChanges > 10 && totalWordChanges <= 20 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                    <span className="text-sm text-white/90">11-20 words</span>
+                                                    <span className="font-bold">$125</span>
+                                                </div>
+                                                <div className={`flex flex-col p-3  ${totalWordChanges > 20 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                    <span className="text-sm text-white/90">20+ words</span>
+                                                    <span className="font-bold">$165</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="mt-2 text-sm text-white/80">
+                                            <a href="nicevois.com/pricing" className="flex items-center gap-1 text-blue-200 hover:text-blue-100 w-fit underline text-sm" target="_blank">
+                                                Learn more about our pricing
+                                                <ExternalLink className="w-3 h-3 mt-1" />
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -454,39 +488,60 @@ function ChangeLyricsPageContent() {
                             {/* Lyrics editor */}
                             {!isLoading && (
                                 <Form.Root className="flex flex-1 flex-col gap-4 pb-6" onSubmit={handleNextStep}>
-                                    <div className="mt-2 overflow-y-auto">
-                                        <div className="relative w-full overflow-auto">
-                                            <table className="caption-bottom text-sm relative h-10 w-full text-clip rounded-md">
-                                                <thead className="[&_tr]:border-b sticky top-0 z-50 h-10 w-full rounded-t-md border-b-2 bg-gray-50">
+                                    <div className="mt-2 overflow-y-auto max-h-[85vh]">
+                                        <div className="relative w-full overflow-visible">
+                                            <table className="caption-bottom text-sm relative h-10 w-full text-clip">
+                                                <thead className="shadow sticky top-0 z-50 h-10 w-full border-b border-b-gray-200 bg-gray-100">
                                                     <tr className="border-b transition-colors data-[state=selected]:bg-muted">
                                                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 w-5 text-sm md:text-base">#</th>
                                                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 text-sm md:text-base">Original Lyrics</th>
-                                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 w-10"><ArrowRight className="w-4 text-muted" /></th>
+                                                        <th className="h-12 px-0 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 w-10"><ArrowRight className="w-4 text-muted" /></th>
                                                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 text-sm md:text-base">Modified Lyrics</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="[&_tr:last-child]:border-0 bg-white">
                                                     {lyrics.map((line) => {
                                                         return (
-                                                            <tr key={line.id} className="border-b transition-colors data-[state=selected]:bg-muted">
+                                                            <tr key={line.id} className="border-b transition-colors data-[state=selected]:bg-muted ">
                                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0 font-medium text-sm md:text-base text-muted">
                                                                     {line.id}
                                                                 </td>
-                                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0 text-sm md:text-base text-gray-900">
+                                                                <td className="py-4 px-3 align-middle [&:has([role=checkbox])]:pr-0 text-sm md:text-base text-gray-900">
                                                                     {line.original}
                                                                 </td>
-                                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
+                                                                <td className="px-0 py-4 align-middle [&:has([role=checkbox])]:pr-0">
                                                                     <ArrowRight className="w-4 text-muted" />
                                                                 </td>
                                                                 <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0 text-sm md:text-base">
-                                                                    <div
-                                                                        key={line.modified}
-                                                                        contentEditable={true}
-                                                                        onBlur={(e) => handleLyricChange(line.id, e.currentTarget.textContent || '', setLyrics, setFormValues)}
-                                                                        suppressContentEditableWarning={true}
-                                                                        dangerouslySetInnerHTML={{ __html: line.markedText || line.modified }}
-                                                                        className="outline-none p-1 rounded hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
-                                                                    />
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <div
+                                                                            key={line.modified}
+                                                                            contentEditable={true}
+                                                                            onBlur={(e) =>
+                                                                                handleLyricChange(
+                                                                                    line.id,
+                                                                                    e.currentTarget.textContent || '',
+                                                                                    setLyrics,
+                                                                                    setFormValues
+                                                                                )
+                                                                            }
+                                                                            suppressContentEditableWarning={true}
+                                                                            dangerouslySetInnerHTML={{ __html: line.markedText || line.modified }}
+                                                                            className="flex-1 outline-none p-2 rounded ring-1 ring-blue-100 hover:ring-2 focus:ring-2 focus:ring-blue-500/50"
+                                                                        />
+                                                                        {line.wordChanges.some((change) => change.hasChanged) && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() =>
+                                                                                    handleResetLine(line.id, setLyrics, setFormValues)
+                                                                                }
+                                                                                className="text-gray-400 hover:text-gray-600"
+                                                                                title="Clear lyric changes"
+                                                                            >
+                                                                                <Eraser className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         );
@@ -504,16 +559,16 @@ function ChangeLyricsPageContent() {
                                     <button
                                         type="button"
                                         onClick={() => handleResetLyrics(setLyrics, setFormValues, toast)}
-                                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-blue-200 text-blue-900 hover:text-blue-200 hover:bg-blue-900 hover:ring-blue-500/50 focus-visible:ring focus-visible:ring-blue-500/50 active:bg-blue-700 active:ring-0 px-5 rounded-t-none rounded-b-md text-sm md:text-base h-10 md:h-12 w-full -mt-4"
+                                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-blue-200 text-blue-900 hover:text-blue-200 hover:bg-blue-900 hover:ring-blue-500/50 focus-visible:ring focus-visible:ring-blue-500/50 active:bg-blue-700 active:ring-0 px-5 rounded-t-none rounded-b-md text-sm md:text-base h-10 md:h-12 w-full -mt-4 shadow"
                                     >
-                                        <Eraser className="w-4 h-4 opacity-85" /> Reset to Original Lyrics
+                                        <Eraser className="w-4 h-4 opacity-85" /> Reset all to original lyrics
                                     </button>
 
 
                                     {/* Replace Section */}
                                     <div className="mt-2 flex flex-col gap-2 w-full">
                                         <label className="flex scroll-m-20 tracking-normal dark:text-white font-semibold text-white text-sm md:text-base">
-                                            Replace Words
+                                            Replace All Words (Case-insensitve)
                                         </label>
                                         <div className="flex flex-col sm:flex-row gap-2 w-full">
                                             <input
@@ -521,14 +576,14 @@ function ChangeLyricsPageContent() {
                                                 value={replaceTerm}
                                                 onChange={(e) => setReplaceTerm(e.target.value)}
                                                 placeholder="Word to replace..."
-                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
+                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
                                             />
                                             <input
                                                 type="text"
                                                 value={replaceWith}
                                                 onChange={(e) => setReplaceWith(e.target.value)}
                                                 placeholder="Replace with..."
-                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
+                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
                                             />
                                             <button
                                                 type="button"
@@ -541,14 +596,14 @@ function ChangeLyricsPageContent() {
                                     </div>
 
                                     {/* Special requests */}
-                                    <Form.Field name="specialRequests" className="mt-2 flex flex-col gap-0.5 last:mb-0 relative flex-1">
+                                    <Form.Field name="specialRequests" className="mt-4 flex flex-col gap-0.5 last:mb-0 relative flex-1">
                                         <label className="flex scroll-m-20 tracking-normal peer-disabled:cursor-not-allowed peer-disabled:text-gray-500 peer-disabled:opacity-50 dark:text-white font-semibold text-white text-sm md:text-base">
                                             Your Requests
                                         </label>
                                         <Form.Control asChild>
                                             <textarea
-                                                className="flex min-h-[80px] w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
-                                                rows={4}
+                                                className="flex min-h-[80px] w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary mt-1"
+                                                rows={6}
                                                 value={specialRequests}
                                                 onChange={(e) => setSpecialRequests(e.target.value)}
                                                 placeholder="Add any special requests here (e.g. special details & pronunciations, etc.) ..."
@@ -580,11 +635,17 @@ function ChangeLyricsPageContent() {
                                     </div>
                                 </div>
                             )}
+                            <Separator.Root
+                                className="shrink-0 dark:bg-gray-100/5 h-[1.5px] w-full mt-9 mb-3 md:my-4 bg-primary/10"
+                                orientation="horizontal"
+                            />
+                            {/* Navigation Buttons */}
+                            <NavigationBtn />
                         </Tabs.Content>
                     </Tabs.Root>
                 </section>
             </div>
-        </main>
+        </main >
     );
 }
 

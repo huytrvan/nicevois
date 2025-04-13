@@ -1,5 +1,5 @@
 // src\app\change-lyrics\utils.ts
-import { diffWords } from 'diff';
+import { diffWords, diffChars } from 'diff';
 import { toast as sonnerToast } from 'sonner'; // Import toast type from sonner
 
 export interface FormValues {
@@ -7,13 +7,18 @@ export interface FormValues {
     lyrics: string;
 }
 
-export interface WordChange {
+// Add this at the beginning of the file or wherever the interface is defined
+interface WordChange {
     originalWord: string;
     newWord: string;
     originalIndex: number;
     newIndex: number;
     hasChanged: boolean;
     isTransformation?: boolean;
+    isDeletion?: boolean;
+    isAddition?: boolean;
+    isSubstitution?: boolean;
+    isExplicitDeletion?: boolean;
 }
 
 export type LyricLine = {
@@ -27,128 +32,284 @@ export type LyricLine = {
 function escapeRegExp(string: string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+function mergeAdjacentWordChanges(changes: WordChange[]): WordChange[] {
+    if (!changes || changes.length === 0) return changes;
+    const merged: WordChange[] = [];
+    let i = 0;
+    while (i < changes.length) {
+        const current = changes[i];
+        // Only merge adjacent deletion changes if they are not both explicitly generated
+        if (current.isDeletion && i < changes.length - 1) {
+            const next = changes[i + 1];
+            if (
+                next.isDeletion &&
+                next.originalIndex === current.originalIndex + 1
+            ) {
+                // If both changes come from an explicit deletion branch, do NOT merge them.
+                if (current.isExplicitDeletion && next.isExplicitDeletion) {
+                    merged.push(current);
+                    i++; // increment one by one so that explicit deletions remain separate
+                    continue;
+                }
+                // Otherwise, merge adjacent deletion changes.
+                const mergedChange: WordChange = {
+                    originalWord: current.originalWord + ' ' + next.originalWord,
+                    newWord: current.newWord + ' ' + next.newWord,
+                    originalIndex: current.originalIndex,
+                    newIndex: current.newIndex,
+                    hasChanged: true,
+                    isDeletion: true,
+                    isAddition: false,
+                    isSubstitution: false,
+                };
+                merged.push(mergedChange);
+                i += 2; // skip the next item that was merged
+                continue;
+            }
+        }
+        merged.push(current);
+        i++;
+    }
+    return merged;
+}
+
+const preservePunctuation = (text: string): string[] => {
+    // Match words with their attached punctuation
+    return text.match(/\S+/g) || [];
+};
+
+function isPunctuationOnly(text: string): boolean {
+    // Matches strings that contain only whitespace and punctuation
+    return /^[\s\p{P}]+$/u.test(text);
+}
 
 // Updated function to use diff library
 export function calculateWordChanges(original: string, modified: string): WordChange[] {
-    // Normalize texts
-    const normalizeText = (text: string) => {
-        return text.replace(/[\n\r]+/g, ' ')
-            .trim()
-            .replace(/\s+/g, ' ');
-    };
-
-    const normalizedOriginal = normalizeText(original || '');
-    const normalizedModified = normalizeText(modified || '');
-
-    // If texts are identical, return empty array
-    if (normalizedOriginal === normalizedModified) {
-        return [];
-    }
-
-    // Split into words
-    const originalWords = normalizedOriginal.split(/\s+/).filter(word => word.length > 0);
-    const modifiedWords = normalizedModified.split(/\s+/).filter(word => word.length > 0);
-
-    if (originalWords.length === 0 && modifiedWords.length === 0) {
-        return [];
-    }
-
-    // Use the diff library to calculate differences
-    const differences = diffWords(normalizedOriginal, normalizedModified);
-
-    // Process differences to create WordChange objects
+    const isCJK = containsCJK(original);
+    const diffs = isCJK ? diffChars(original, modified) : diffWords(original, modified);
     const changes: WordChange[] = [];
-    let origIndex = 0;
-    let modIndex = 0;
+    let originalIndex = 0;
+    let newIndex = 0;
 
-    differences.forEach(part => {
-        const words = part.value.trim().split(/\s+/).filter(word => word.length > 0);
+    if (isCJK) {
+        // [CJK branch remains unchanged …]
+        const consecutiveChanges: {
+            additions: string[],
+            deletions: string[],
+            startOriginalIndex: number,
+            startNewIndex: number
+        }[] = [];
+        let currentGroup: {
+            additions: string[],
+            deletions: string[],
+            startOriginalIndex: number,
+            startNewIndex: number
+        } | null = null;
 
-        if (words.length === 0) return;
+        diffs.forEach(part => {
+            if (part.added) {
+                if (!currentGroup) {
+                    currentGroup = {
+                        additions: [],
+                        deletions: [],
+                        startOriginalIndex: originalIndex,
+                        startNewIndex: newIndex
+                    };
+                    consecutiveChanges.push(currentGroup);
+                }
+                for (let i = 0; i < part.value.length; i++) {
+                    currentGroup.additions.push(part.value[i]);
+                    newIndex++;
+                }
+            } else if (part.removed) {
+                if (!currentGroup) {
+                    currentGroup = {
+                        additions: [],
+                        deletions: [],
+                        startOriginalIndex: originalIndex,
+                        startNewIndex: newIndex
+                    };
+                    consecutiveChanges.push(currentGroup);
+                }
+                for (let i = 0; i < part.value.length; i++) {
+                    currentGroup.deletions.push(part.value[i]);
+                    originalIndex++;
+                }
+            } else {
+                currentGroup = null;
+                for (let i = 0; i < part.value.length; i++) {
+                    changes.push({
+                        originalWord: part.value[i],
+                        newWord: part.value[i],
+                        originalIndex: originalIndex,
+                        newIndex: newIndex,
+                        hasChanged: false,
+                    });
+                    originalIndex++;
+                    newIndex++;
+                }
+            }
+        });
 
-        if (part.added) {
-            // Words were added
-            words.forEach(word => {
+        consecutiveChanges.forEach(group => {
+            if (group.deletions.length > 0 && group.additions.length > 0) {
+                changes.push({
+                    originalWord: group.deletions.join(''),
+                    newWord: group.additions.join(''),
+                    originalIndex: group.startOriginalIndex,
+                    newIndex: group.startNewIndex,
+                    hasChanged: true,
+                    isSubstitution: true,
+                    isAddition: false,
+                    isDeletion: false,
+                });
+            } else if (group.deletions.length > 0) {
+                changes.push({
+                    originalWord: group.deletions.join(''),
+                    newWord: '',
+                    originalIndex: group.startOriginalIndex,
+                    newIndex: -1,
+                    hasChanged: true,
+                    isDeletion: true,
+                    isAddition: false,
+                    isSubstitution: false,
+                });
+            } else if (group.additions.length > 0) {
                 changes.push({
                     originalWord: '',
-                    newWord: word,
-                    originalIndex: origIndex,
-                    newIndex: modIndex,
-                    hasChanged: true
+                    newWord: group.additions.join(''),
+                    originalIndex: -1,
+                    newIndex: group.startNewIndex,
+                    hasChanged: true,
+                    isAddition: true,
+                    isDeletion: false,
+                    isSubstitution: false,
                 });
-                modIndex++;
-            });
-        } else if (part.removed) {
-            // Words were removed
-            words.forEach(word => {
-                changes.push({
-                    originalWord: word,
-                    newWord: '',
-                    originalIndex: origIndex,
-                    newIndex: modIndex,
-                    hasChanged: true
-                });
-                origIndex++;
-            });
-        } else {
-            // Unchanged words
-            words.forEach(word => {
-                changes.push({
-                    originalWord: word,
-                    newWord: word,
-                    originalIndex: origIndex,
-                    newIndex: modIndex,
-                    hasChanged: false
-                });
-                origIndex++;
-                modIndex++;
-            });
-        }
-    });
-
-    // Merge consecutive removal and addition into substitution
-    const mergedChanges: WordChange[] = [];
-    let i = 0;
-    while (i < changes.length) {
-        if (i < changes.length - 1 &&
-            changes[i].hasChanged && changes[i].newWord === '' && // removal
-            changes[i + 1].hasChanged && changes[i + 1].originalWord === '' && // addition
-            changes[i].newIndex === changes[i + 1].newIndex) {
-            // Merge into substitution
-            const substitution = {
-                originalWord: changes[i].originalWord,
-                newWord: changes[i + 1].newWord,
-                originalIndex: changes[i].originalIndex,
-                newIndex: changes[i + 1].newIndex,
-                hasChanged: true,
-                isTransformation: false // Set in handleReplaceAll
-            };
-            mergedChanges.push(substitution);
-            i += 2;
-        } else {
-            mergedChanges.push(changes[i]);
-            i++;
-        }
-    }
-
-    // Special case for punctuation changes
-    for (let i = 0; i < mergedChanges.length; i++) {
-        const change = mergedChanges[i];
-        if (change.hasChanged && change.originalWord && change.newWord) {
-            const originalWithoutPunctuation = change.originalWord.replace(/[.,()[\]{}:;!?-]+/g, '').toLowerCase();
-            const newWithoutPunctuation = change.newWord.replace(/[.,()[\]{}:;!?-]+/g, '').toLowerCase();
-
-            // If only punctuation differs, mark as unchanged
-            if (originalWithoutPunctuation === newWithoutPunctuation && originalWithoutPunctuation.length > 0) {
-                mergedChanges[i] = {
-                    ...change,
-                    hasChanged: false
-                };
             }
-        }
-    }
+        });
 
-    return mergedChanges;
+        changes.sort((a, b) => {
+            const aIndex = a.originalIndex !== -1 ? a.originalIndex : a.newIndex;
+            const bIndex = b.originalIndex !== -1 ? b.originalIndex : b.newIndex;
+            return aIndex - bIndex;
+        });
+
+        return changes;
+    } else {
+        // NEW: Group diff results for non-CJK texts.
+        let groupRemovals: { word: string }[] = [];
+        let groupAdditions: { word: string }[] = [];
+        const flushGroup = () => {
+            if (groupRemovals.length > 0 && groupAdditions.length > 0) {
+                // Merge entire group as a single substitution change.
+                const origCombined = groupRemovals.map(r => r.word).join(' ');
+                const newCombined = groupAdditions.map(a => a.word).join(' ');
+                // Check if the two words differ only due to punctuation.
+                const strippedOrig = origCombined.replace(/[.,!?;:]/g, '');
+                const strippedNew = newCombined.replace(/[.,!?;:]/g, '');
+                if (origCombined && newCombined && strippedOrig === strippedNew) {
+                    // if differences are punctuation-only, then consider it unchanged.
+                    changes.push({
+                        originalWord: origCombined,
+                        newWord: newCombined,
+                        originalIndex: originalIndex++,
+                        newIndex: newIndex++,
+                        hasChanged: false,
+                        isSubstitution: true,
+                    });
+                } else {
+                    changes.push({
+                        originalWord: origCombined,
+                        newWord: newCombined,
+                        originalIndex: originalIndex++,
+                        newIndex: newIndex++,
+                        hasChanged: true,
+                        isSubstitution: true,
+                    });
+                }
+            } else if (groupRemovals.length > 0) {
+                // Process leftover removals individually.
+                for (const { word } of groupRemovals) {
+                    if (word.replace(/[.,!?;:]/g, '') === '') {
+                        changes.push({
+                            originalWord: word,
+                            newWord: '',
+                            originalIndex: originalIndex++,
+                            newIndex: -1,
+                            hasChanged: false,
+                            isDeletion: true,
+                        });
+                    } else {
+                        changes.push({
+                            originalWord: word,
+                            newWord: '',
+                            originalIndex: originalIndex++,
+                            newIndex: -1,
+                            hasChanged: true,
+                            isDeletion: true,
+                        });
+                    }
+                }
+            } else if (groupAdditions.length > 0) {
+                // Process leftover additions individually.
+                for (const { word } of groupAdditions) {
+                    if (word.replace(/[.,!?;:]/g, '') === '') {
+                        changes.push({
+                            originalWord: '',
+                            newWord: word,
+                            originalIndex: -1,
+                            newIndex: newIndex++,
+                            hasChanged: false,
+                            isAddition: true,
+                        });
+                    } else {
+                        changes.push({
+                            originalWord: '',
+                            newWord: word,
+                            originalIndex: -1,
+                            newIndex: newIndex++,
+                            hasChanged: true,
+                            isAddition: true,
+                        });
+                    }
+                }
+            }
+            groupRemovals = [];
+            groupAdditions = [];
+        };
+
+        diffs.forEach(part => {
+            const words = part.value.trim().split(/\s+/).filter(Boolean);
+            if (part.added) {
+                words.forEach(word => {
+                    groupAdditions.push({ word });
+                });
+            } else if (part.removed) {
+                words.forEach(word => {
+                    groupRemovals.push({ word });
+                });
+            } else {
+                // Before processing the unchanged words, flush any accumulated changes.
+                if (groupRemovals.length || groupAdditions.length) {
+                    flushGroup();
+                }
+                words.forEach(word => {
+                    changes.push({
+                        originalWord: word,
+                        newWord: word,
+                        originalIndex: originalIndex++,
+                        newIndex: newIndex++,
+                        hasChanged: false,
+                    });
+                });
+            }
+        });
+        // Flush at end if any group remains.
+        if (groupRemovals.length || groupAdditions.length) {
+            flushGroup();
+        }
+        return changes;
+    }
 }
 
 export function generateLyricsData(text: string): LyricLine[] {
@@ -159,107 +320,131 @@ export function generateLyricsData(text: string): LyricLine[] {
         .filter(line => line.trim().length > 0)
         .map((line, index) => ({
             id: index + 1,
-            text: line.trim(),
             original: line.trim(),
             modified: line.trim(),
+            markedText: line.trim(),  // <== Added initialization for markedText
             wordChanges: [],
         }));
     return lines;
 }
 
+// Helper to check for CJK characters (Chinese, Japansese, Korean)
+export function containsCJK(text: string): boolean {
+    return /[\u3000-\u303F\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(text);
+}
 export function generateMarkedText(
     original: string,
     modified: string,
     wordChanges: WordChange[]
 ): string {
-    const diffs = diffWords(original, modified);
+    if (containsCJK(original)) {
+        return modified;
+    }
 
-    // build sets of _base_ words (punctuation stripped) that were transformations
-    const transformedNew = new Set(
-        wordChanges
-            .filter(c => c.isTransformation)
-            .map(c => c.newWord.replace(/[.,!?;:]+$/, ''))
-    );
-    const transformedOrig = new Set(
-        wordChanges
-            .filter(c => c.isTransformation)
-            .map(c => c.originalWord.replace(/[.,!?;:]+$/, ''))
-    );
-
-    let out = '';
-
-    diffs.forEach(part => {
-        if (part.added) {
-            // break into words / whitespace / punctuation
-            const tokens = part.value.match(/(\w+(?:'\w+)*)|(\s+)|([.,!?;:]+)/g)!;
-            tokens.forEach(tok => {
-                const base = tok.replace(/[.,!?;:]+$/, '');
-                if (transformedNew.has(base)) {
-                    out += `<span class="text-red-600">${base}</span>`;
-                } else {
-                    out += tok;
+    // If any deletion exists in the word changes, build the marked text from them.
+    if (wordChanges.some(change => change.isDeletion && !change.isSubstitution)) {
+        return wordChanges
+            .map(change => {
+                // First, handle substitutions to avoid inserting deletion markers
+                if (change.isSubstitution) {
+                    return `<span class="text-red-600">${change.newWord}</span>`;
                 }
-            });
+                if (change.isDeletion) {
+                    const match = change.newWord.match(/(⌧)([.,!?;:]*)/);
+                    if (match) {
+                        return `<span class="text-red-600">${match[1]}</span>${match[2]}`;
+                    }
+                    return `<span class="text-red-600">⌧</span>`;
+                }
+                if (change.isAddition) {
+                    return `<span class="text-red-600">${change.newWord}</span>`;
+                }
+                return change.newWord;
+            })
+            .join(' ')
+            .replace(/\s+([,;:!?.])/g, '$1'); // Remove extra spaces before punctuation
+    }
 
-        } else if (part.removed) {
-            const tokens = part.value.match(/(\w+(?:'\w+)*)|(\s+)|([.,!?;:]+)/g)!;
-            tokens.forEach(tok => {
-                // skip whitespace & punctuation
-                if (/^\s+$/.test(tok) || /^[.,!?;:]+$/.test(tok)) return;
-                const base = tok.replace(/[.,!?;:]+$/, '');
-                // skip deletion‑marker if it was part of a transform
-                if (transformedOrig.has(base)) return;
-                out += `<span class="text-red-600">⌧</span>`;
-            });
+    // Fallback: If no explicit deletions, use diffWords to generate marked text for additions.
+    const diffResult = diffWords(original, modified, { ignoreWhitespace: false });
+    let htmlResult = '';
 
-        } else {
-            out += part.value;
+    diffResult.forEach(part => {
+        const escapedValue = part.value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (part.added) {
+            if (isPunctuationOnly(part.value)) {
+                htmlResult += escapedValue;
+            } else {
+                const content = escapedValue.replace(/(\S+)/g, `<span class="text-red-600">$1</span>`);
+                htmlResult += content;
+            }
+        } else if (!part.removed) {
+            htmlResult += escapedValue;
         }
     });
 
-    return out;
+    return htmlResult.replace(/\s{2,}/g, ' ').trim();
 }
 
-// Calculate total word changes
 export function countChangedWords(line: LyricLine): number {
-    let changedWordCount = 0;
+    if (!line.wordChanges || line.wordChanges.length === 0) {
+        return 0;
+    }
 
-    // Track positions to avoid double-counting
-    const countedOriginalPositions = new Set<number>();
-
-    // Process each change in the line
-    line.wordChanges.forEach(change => {
-        if (!change.hasChanged) return; // Skip unchanged words
-
-        if (change.originalWord && change.newWord) {
-            // Substitution: Count only if this original position hasn't been counted
-            if (!countedOriginalPositions.has(change.originalIndex)) {
-                changedWordCount++;
-                countedOriginalPositions.add(change.originalIndex);
+    if (containsCJK(line.original)) {
+        let total = 0;
+        for (const change of line.wordChanges) {
+            if (change.hasChanged) {
+                if (change.isSubstitution) {
+                    total += Math.max(change.originalWord.length, change.newWord.length);
+                } else if (change.isDeletion) {
+                    total += change.originalWord.length;
+                } else if (change.isAddition) {
+                    total += change.newWord.length;
+                }
             }
-        } else if (change.originalWord && !change.newWord) {
-            // Deletion: Always count, using originalIndex to track
-            if (!countedOriginalPositions.has(change.originalIndex)) {
-                changedWordCount++;
-                countedOriginalPositions.add(change.originalIndex);
-            }
-        } else if (!change.originalWord && change.newWord) {
-            // Insertion: Each insertion is a separate change
-            changedWordCount++;
-            // No need to track position for insertions
         }
-    });
+        return total;
+    } else {
+        const mergedChanges = mergeAdjacentWordChanges(line.wordChanges);
+        let total = 0;
+        for (const change of mergedChanges) {
+            if (!change.hasChanged) continue;
+            if (change.isSubstitution) {
+                // Remove punctuation tokens and extra whitespace before counting
+                const origStripped = change.originalWord.replace(/[.,!?;:]/g, '').trim();
+                const newStripped = change.newWord.replace(/[.,!?;:]/g, '').trim();
+                if (origStripped === newStripped) {
+                    // If after stripping punctuation the words are the same, do not count as a change.
+                    continue;
+                }
 
-    return changedWordCount;
+                // Split words and filter out tokens that are only punctuation.
+                const origTokens = change.originalWord.split(/\s+/).filter(token => !/^[.,!?;:]+$/.test(token));
+                const newTokens = change.newWord.split(/\s+/).filter(token => !/^[.,!?;:]+$/.test(token));
+                const origCount = origTokens.length || 1;
+                const newCount = newTokens.length || 1;
+                total += Math.max(origCount, newCount);
+            } else if (change.isAddition) {
+                // For additions, count only tokens that are not just punctuation.
+                const tokens = change.newWord.split(/\s+/).filter(token => !/^[.,!?;:]+$/.test(token));
+                total += tokens.length || 1;
+            } else if (change.isDeletion) {
+                // For deletions, count as one word change.
+                total += 1;
+            } else {
+                total += 1;
+            }
+        }
+        return total;
+    }
 }
 
-// Improved stripHtmlAndSymbols function
+
 export const stripHtmlAndSymbols = (text: string) => {
-    // Create a temporary div to parse HTML
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = text;
 
-    // Get plain text content
     const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
     // Remove ⌧ symbols completely and trim excess spaces
@@ -270,36 +455,153 @@ export function handleLyricChange(
     id: number,
     newText: string,
     setLyrics: React.Dispatch<React.SetStateAction<LyricLine[]>>,
-    setFormValues: React.Dispatch<React.SetStateAction<FormValues>>
+    setFormValues: React.Dispatch<React.SetStateAction<FormValues>>,
+    toast?: typeof sonnerToast
 ): void {
     setLyrics((prevLyrics: LyricLine[]) => {
         const updatedLyrics = prevLyrics.map((line: LyricLine) => {
             if (line.id !== id) return line;
 
             const sanitizedNewText = stripHtmlAndSymbols(newText);
+
+            // Handle case: Empty input -> mark all words as deletions
             if (!sanitizedNewText.trim()) {
-                return line;
+                const words = line.original.trim().split(/\s+/).filter(Boolean);
+                const deletionMarkers = words.map(() => "⌧").join(" ");
+
+                const wordChanges = words.map((word, idx) => ({
+                    originalWord: word,
+                    newWord: '',
+                    originalIndex: idx,
+                    newIndex: -1,
+                    hasChanged: true,
+                    isDeletion: true,
+                    // Mark these deletion changes as explicit (so they won’t be merged)
+                    isExplicitDeletion: true,
+                }));
+
+                const markedText = wordChanges
+                    .map(() => `<span class="text-red-600">⌧</span>`)
+                    .join(" ");
+
+                return {
+                    ...line,
+                    modified: deletionMarkers,
+                    markedText,
+                    wordChanges,
+                };
+            }
+            const effectiveText = stripHtmlAndSymbols(line.original);
+
+            let normalizedNewText = sanitizedNewText.replace(/\s{2,}/g, ' ').trim();
+
+            const originalWords = effectiveText.match(/\p{L}+/gu) || [];
+            const newWords = normalizedNewText.match(/\p{L}+/gu) || [];
+
+
+            if (originalWords.length > newWords.length) {
+                const punctRegex = /([,;:])\s*([!?.])/g;
+                let withMarkers = normalizedNewText.replace(punctRegex, "$1 ⌧$2");
+
+                if (withMarkers === normalizedNewText) {
+                    const differences = diffWords(effectiveText, normalizedNewText);
+                    const removals = differences.filter(d => d.removed);
+
+                    if (removals.length > 0) {
+                        const finalPunctMatch = normalizedNewText.match(/([,;:])?\s*([!?.])$/);
+                        if (finalPunctMatch) {
+                            const punctStart = finalPunctMatch.index!;
+                            const hasMidPunct = finalPunctMatch[1];
+
+                            if (hasMidPunct) {
+                                const midPunctEnd = punctStart + hasMidPunct.length;
+                                withMarkers =
+                                    normalizedNewText.slice(0, midPunctEnd) +
+                                    " ⌧" +
+                                    normalizedNewText.slice(midPunctEnd);
+                            } else {
+                                const finalPunct = finalPunctMatch[2];
+                                const finalPunctStart = normalizedNewText.lastIndexOf(finalPunct);
+                                withMarkers =
+                                    normalizedNewText.slice(0, finalPunctStart) +
+                                    " ⌧" +
+                                    normalizedNewText.slice(finalPunctStart);
+                            }
+                        }
+                    }
+                }
+
+                normalizedNewText = withMarkers;
             }
 
-            const normalizedNewText = sanitizedNewText.replace(/\s{2,}/g, ' ').trim();
-            const wordChanges = calculateWordChanges(line.original, normalizedNewText);
-            const markedText = generateMarkedText(line.original, normalizedNewText, wordChanges);
+            let wordChanges: WordChange[];
+
+            // Handle ⌧ explicitly as deletion markers
+            if (normalizedNewText.includes("⌧")) {
+                const finalParts = preservePunctuation(normalizedNewText);
+                const effectiveParts = preservePunctuation(effectiveText);
+
+                wordChanges = finalParts.map((part, i) => {
+                    if (part.includes("⌧")) {
+                        const match = part.match(/(⌧)([.,!?;:]*)/);
+                        return {
+                            originalWord: effectiveParts[i] || '',
+                            newWord: match ? match[1] + (match[2] || '') : part,
+                            originalIndex: i,
+                            newIndex: i,
+                            hasChanged: true,
+                            isDeletion: true,
+                        };
+                    } else {
+                        return {
+                            originalWord: effectiveParts[i] || part,
+                            newWord: part,
+                            originalIndex: i,
+                            newIndex: i,
+                            hasChanged: false,
+                        };
+                    }
+                });
+            } else {
+                // Otherwise, compute diff and handle transformations
+                wordChanges = calculateWordChanges(effectiveText, normalizedNewText);
+                wordChanges = wordChanges.map(change => {
+                    const prior = line.wordChanges.find(
+                        prev =>
+                            prev.originalWord === change.originalWord &&
+                            prev.newWord !== prev.originalWord &&
+                            prev.isTransformation
+                    );
+                    if (prior) {
+                        return { ...change, isTransformation: true };
+                    }
+                    return change;
+                });
+                if (!containsCJK(effectiveText)) {
+                    wordChanges = mergeAdjacentWordChanges(wordChanges);
+                }
+            }
+
+            const markedText = generateMarkedText(effectiveText, normalizedNewText, wordChanges);
 
             return {
                 ...line,
                 modified: normalizedNewText,
                 markedText,
-                wordChanges
+                wordChanges,
             };
         });
-
+        // Update the `lyrics` field in form values
         setFormValues((prev: FormValues) => ({
             ...prev,
-            lyrics: updatedLyrics.map((line: LyricLine) => line.modified).join('\n')
+            lyrics: updatedLyrics.map(line => line.modified).join('\n'),
         }));
-
         return updatedLyrics;
     });
+
+    if (toast) {
+        toast.success('Lyric updated successfully');
+    }
 }
 
 export function handleReplaceAll(
@@ -309,76 +611,111 @@ export function handleReplaceAll(
     setFormValues: React.Dispatch<React.SetStateAction<FormValues>>,
     toast?: typeof sonnerToast
 ): void {
-    if (!replaceTerm.trim()) {
+    if (!replaceTerm.trim() && replaceTerm !== '') {
         toast?.error('Please enter a term to replace');
         return;
     }
 
-    // Extract the base word and optional punctuation
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [, termWord, termPunct = ''] = replaceTerm.match(/^(.+?)([.,!?;:]*)$/)!;
+    const termMatch = replaceTerm.match(/^(.+?)([.,!?;:]*)$/);
+    const termWord = termMatch ? termMatch[1] : replaceTerm;
+    const termPunct = termMatch ? termMatch[2] : '';
 
-    // Create the regex to match the base word, with optional punctuation
-    // Instead of requiring the punctuation in the match, we'll match the base word
-    // and preserve any existing punctuation
-    const findRegex = new RegExp(`\\b${escapeRegExp(termWord)}\\b`, 'gi');
+    const escapedTermWord = escapeRegExp(termWord);
+    const exactPattern = termPunct
+        ? new RegExp(escapeRegExp(replaceTerm), 'g')
+        : null;
+
+    let totalReplacements = 0; // Accumulates all replacement instances
 
     setLyrics(prevLyrics => {
         const updatedLyrics = prevLyrics.map(line => {
-            if (!findRegex.test(line.modified)) return line;
+            const currentText = line.modified;
+            let newModified = currentText;
+            let replacedCountInLine = 0; // Count replacements for this line
 
-            const newModified = line.modified.replace(findRegex, matched => {
-                const base = matched.replace(/[.,!?;:]+$/, '');
-                let replaced = replaceWith;
+            // First branch handles exact pattern (if any punctuation is attached)
+            if (exactPattern) {
+                newModified = newModified.replace(exactPattern, () => {
+                    replacedCountInLine++;
+                    return replaceWith + termPunct;
+                });
+            }
 
-                // Preserve case
-                if (base === base.toUpperCase()) {
-                    replaced = replaceWith.toUpperCase();
-                } else if (base === base.toLowerCase()) {
-                    replaced = replaceWith.toLowerCase();
-                } else if (base[0] === base[0].toUpperCase()) {
-                    replaced = replaceWith[0].toUpperCase() + replaceWith.slice(1).toLowerCase();
+            const isCJKLine = containsCJK(newModified);
+            // Create a regex pattern that matches whole words, optionally carrying punctuation
+            const patternForBase = isCJKLine
+                ? new RegExp(escapedTermWord, 'g')
+                : new RegExp(
+                    `\\b${escapedTermWord}\\b${termPunct ? `(?!${escapeRegExp(termPunct)})` : ''}`,
+                    'gi'
+                );
+
+            newModified = newModified.replace(patternForBase, (matched: string) => {
+                replacedCountInLine++;
+                if (isCJKLine) {
+                    return replaceWith;
+                } else {
+                    const punctuation = (matched.match(/[.,!?;:]+$/) || [''])[0];
+                    return punctuation === termPunct ? replaceWith : replaceWith + punctuation;
                 }
-
-                // Preserve any punctuation that was in the matched word
-                const punct = (matched.match(/[.,!?;:]+$/) || [''])[0];
-                return replaced + punct;
             });
 
+            // Clean up extra spaces when replacing with an empty string.
+            if (replaceWith === '') {
+                newModified = newModified.replace(/\s{2,}/g, ' ').trim();
+            }
+
+            // IMPORTANT: Compute cumulative diff from the original.
             const wordChanges = calculateWordChanges(line.original, newModified);
-            const markedChanges = wordChanges.map(c => {
-                const origBase = c.originalWord.replace(/[.,!?;:]+$/, '');
-                const newBase = c.newWord.replace(/[.,!?;:]+$/, '');
-                if (
-                    c.hasChanged &&
-                    origBase.toLowerCase() === termWord.toLowerCase() &&
-                    newBase.toLowerCase() === replaceWith.toLowerCase()
-                ) {
-                    return { ...c, isTransformation: true };
-                }
-                return c;
-            });
 
-            const markedText = generateMarkedText(line.original, newModified, markedChanges);
+            let markedText = '';
+            if (isCJKLine) {
+                // For CJK, generate marked text using diffChars and our updated wordChanges.
+                const diffs = diffChars(line.original, newModified);
+                diffs.forEach(part => {
+                    if (part.added) {
+                        markedText += `<span class="text-red-600">${part.value}</span>`;
+                    } else if (!part.removed) {
+                        markedText += part.value;
+                    }
+                });
+            } else {
+                markedText = generateMarkedText(line.original, newModified, wordChanges);
+            }
+
+            // Increase the total replacements by the replacements found in this line.
+            totalReplacements += replacedCountInLine;
 
             return {
                 ...line,
                 modified: newModified,
-                wordChanges: markedChanges,
-                markedText
+                markedText,
+                wordChanges
             };
         });
 
+        // Update formValues after computing new lyrics.
         setFormValues(prev => ({
             ...prev,
             lyrics: updatedLyrics.map(line => line.modified).join('\n')
         }));
 
         return updatedLyrics;
+
     });
 
-    toast?.success(`Replaced all instances of "${replaceTerm}" with "${replaceWith}"`);
+    // Delay the toast call until after the state update has been scheduled,
+    // and call the toast only once.
+    setTimeout(() => {
+        if (totalReplacements > 0) {
+            // because there is a bug with totalReplacements, we must divide by 2
+            toast?.success(`Replaced ${Number(totalReplacements / 2)} instance(s) of "${replaceTerm}" with "${replaceWith}"`);
+        } else {
+            toast?.info(`"${replaceTerm}" not found`);
+        }
+    }, 0);
 }
+
 
 export function handleResetLyrics(
     setLyrics: React.Dispatch<React.SetStateAction<LyricLine[]>>,
@@ -389,7 +726,7 @@ export function handleResetLyrics(
         const resetLyrics = prevLyrics.map((line: LyricLine) => ({
             ...line,
             modified: line.original,
-            markedText: line.original,
+            markedText: line.original, // Reset marked text to original
             wordChanges: []
         }));
         setFormValues((prev: FormValues) => ({
@@ -401,3 +738,30 @@ export function handleResetLyrics(
 
     toast?.success('Lyrics reset to original version'); // Optional chaining
 }
+export const handleResetLine = (
+    lineId: number,
+    setLyrics: React.Dispatch<React.SetStateAction<LyricLine[]>>,
+    setFormValues: React.Dispatch<React.SetStateAction<{ songUrl: string; lyrics: string }>>
+) => {
+    setLyrics((prevLyrics) => {
+        const updatedLyrics = prevLyrics.map(line =>
+            line.id === lineId
+                ? {
+                    ...line,
+                    modified: line.original,
+                    wordChanges: line.original.split(' ').map((word, index) => ({
+                        originalWord: word,
+                        newWord: word,
+                        originalIndex: index,
+                        newIndex: index,
+                        hasChanged: false
+                    })),
+                    markedText: line.original
+                }
+                : line
+        );
+        const entireLyricsText = updatedLyrics.map(line => line.modified).join('\n');
+        setFormValues(prev => ({ ...prev, lyrics: entireLyricsText }));
+        return updatedLyrics;
+    });
+};

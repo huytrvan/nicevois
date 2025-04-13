@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, ShoppingCart } from 'lucide-react';
 import React from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Separator from "@radix-ui/react-separator";
@@ -394,6 +394,15 @@ function OrderReviewPageContent() {
                                 className="shrink-0 dark:bg-gray-100/5 h-[1.5px] w-full my-3 md:my-4 bg-primary/10"
                                 orientation="horizontal"
                             />
+                            {/* Total Cost */}
+                            <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border border-blue-300/50 bg-primary md:relative md:rounded-md md:bg-primary/80 mb-8 text-left text-white">
+                                <div className="p-4 flex">
+                                    <ShoppingCart className="w-6 h-6 text-white mt-[0.5] mr-3 ml-1" />
+                                    <p className="font-medium text-white md:block">
+                                        Total: <span className="font-bold text-xl">${calculateTotal().toFixed(2)}</span>
+                                    </p>
+                                </div>
+                            </div>
 
                             {isLoading && (
                                 <div className="flex items-center justify-center py-8">
@@ -414,16 +423,16 @@ function OrderReviewPageContent() {
                                 <div className="flex flex-col space-y-2 overflow-y-auto md:h-auto lg:h-full">
                                     {/* Display Lyrics Summary */}
                                     <div className="space-y-2 my-4">
-                                        <div className="p-4 bg-white rounded-lg">
+                                        <div className="py-8 px-4 bg-white">
                                             <h4 className="text-lg font-medium text-blue-800">Lyrics Changes ({wordChangedCount} word{wordChangedCount > 1 ? 's' : ''})</h4>
                                             {lyrics.filter(line => line.modified !== line.original).length > 0 ? (
                                                 <div className="overflow-x-auto">
                                                     <table className="min-w-full border border-gray-200">
                                                         <thead className="bg-gray-100">
                                                             <tr>
-                                                                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border-b">Line #</th>
-                                                                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border-b">Original</th>
-                                                                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border-b">Modified</th>
+                                                                <th className="px-4 py-2 text-left text-sm font-medium text-primary border-b">Line #</th>
+                                                                <th className="px-4 py-2 text-left text-sm font-medium text-primary border-b">Original</th>
+                                                                <th className="px-4 py-2 text-left text-sm font-medium text-primary border-b">Modified</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -502,14 +511,6 @@ function OrderReviewPageContent() {
 
                                                 </label>
                                             ))}
-                                    </div>
-
-                                    <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border-t bg-primary md:relative md:rounded-md md:bg-primary/80 mb-8 text-right">
-                                        <div className="flex items-center justify-between p-4">
-                                            <span className="font-medium text-white md:block">
-                                                Total: <span className="font-bold">${calculateTotal().toFixed(2)}</span>
-                                            </span>
-                                        </div>
                                     </div>
                                 </div>
                             )}
