@@ -350,11 +350,11 @@ export function generateMarkedText(
                     return `<span class="text-red-600">${change.newWord}</span>`;
                 }
                 if (change.isDeletion) {
-                    const match = change.newWord.match(/(⌧)([.,!?;:]*)/);
+                    const match = change.newWord.match(/(🗙)([.,!?;:]*)/);
                     if (match) {
                         return `<span class="text-red-600">${match[1]}</span>${match[2]}`;
                     }
-                    return `<span class="text-red-600">⌧</span>`;
+                    return `<span class="text-red-600">🗙</span>`;
                 }
                 if (change.isAddition) {
                     return `<span class="text-red-600">${change.newWord}</span>`;
@@ -440,6 +440,48 @@ export function countChangedWords(line: LyricLine): number {
     }
 }
 
+export function getDistinctChangedWords(lyrics: LyricLine[]): string[] {
+    // Helper function to normalize a word:
+    // It removes punctuation from the start and end, then converts to lowercase.
+    const normalizeWord = (word: string): string => {
+        return word
+            .replace(/^[.,!?;:"'\[\]{}\(\)\-—_]+|[.,!?;:"'\[\]{}\(\)\-—_]+$/g, "")
+            .toLowerCase();
+    };
+
+    const uniqueWords = new Set<string>();
+
+    // Loop over every lyric line.
+    lyrics.forEach(line => {
+        // Depending on the text content, if it's not CJK, merge adjacent changes.
+        const changes = containsCJK(line.original)
+            ? line.wordChanges
+            : mergeAdjacentWordChanges(line.wordChanges);
+
+        changes.forEach(change => {
+            if (change.hasChanged) {
+                // For deletion changes, we add "🗙" before the normalized original word.
+                if (change.isDeletion) {
+                    const originalNorm = normalizeWord(change.originalWord);
+                    if (originalNorm) uniqueWords.add(`🗙${originalNorm}`);
+                }
+                // For substitution and addition, use the modified (new) word.
+                else if (change.isSubstitution || change.isAddition) {
+                    const newNorm = normalizeWord(change.newWord);
+                    if (newNorm) uniqueWords.add(newNorm);
+                }
+                // Fallback: if no specific flag is set, default to using the modified (new) word.
+                else {
+                    const fallbackNorm = normalizeWord(change.newWord);
+                    if (fallbackNorm) uniqueWords.add(fallbackNorm);
+                }
+            }
+        });
+    });
+
+    return Array.from(uniqueWords);
+}
+
 
 export const stripHtmlAndSymbols = (text: string) => {
     const tempDiv = document.createElement('div');
@@ -447,8 +489,8 @@ export const stripHtmlAndSymbols = (text: string) => {
 
     const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
-    // Remove ⌧ symbols completely and trim excess spaces
-    return plainText.replace(/⌧/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    // Remove 🗙 symbols completely and trim excess spaces
+    return plainText.replace(/🗙/g, ' ').replace(/\s{2,}/g, ' ').trim();
 };
 
 export function handleLyricChange(
@@ -467,7 +509,7 @@ export function handleLyricChange(
             // Handle case: Empty input -> mark all words as deletions
             if (!sanitizedNewText.trim()) {
                 const words = line.original.trim().split(/\s+/).filter(Boolean);
-                const deletionMarkers = words.map(() => "⌧").join(" ");
+                const deletionMarkers = words.map(() => "🗙").join(" ");
 
                 const wordChanges = words.map((word, idx) => ({
                     originalWord: word,
@@ -481,7 +523,7 @@ export function handleLyricChange(
                 }));
 
                 const markedText = wordChanges
-                    .map(() => `<span class="text-red-600">⌧</span>`)
+                    .map(() => `<span class="text-red-600">🗙</span>`)
                     .join(" ");
 
                 return {
@@ -501,7 +543,7 @@ export function handleLyricChange(
 
             if (originalWords.length > newWords.length) {
                 const punctRegex = /([,;:])\s*([!?.])/g;
-                let withMarkers = normalizedNewText.replace(punctRegex, "$1 ⌧$2");
+                let withMarkers = normalizedNewText.replace(punctRegex, "$1 🗙$2");
 
                 if (withMarkers === normalizedNewText) {
                     const differences = diffWords(effectiveText, normalizedNewText);
@@ -517,14 +559,14 @@ export function handleLyricChange(
                                 const midPunctEnd = punctStart + hasMidPunct.length;
                                 withMarkers =
                                     normalizedNewText.slice(0, midPunctEnd) +
-                                    " ⌧" +
+                                    " 🗙" +
                                     normalizedNewText.slice(midPunctEnd);
                             } else {
                                 const finalPunct = finalPunctMatch[2];
                                 const finalPunctStart = normalizedNewText.lastIndexOf(finalPunct);
                                 withMarkers =
                                     normalizedNewText.slice(0, finalPunctStart) +
-                                    " ⌧" +
+                                    " 🗙" +
                                     normalizedNewText.slice(finalPunctStart);
                             }
                         }
@@ -536,14 +578,14 @@ export function handleLyricChange(
 
             let wordChanges: WordChange[];
 
-            // Handle ⌧ explicitly as deletion markers
-            if (normalizedNewText.includes("⌧")) {
+            // Handle 🗙 explicitly as deletion markers
+            if (normalizedNewText.includes("🗙")) {
                 const finalParts = preservePunctuation(normalizedNewText);
                 const effectiveParts = preservePunctuation(effectiveText);
 
                 wordChanges = finalParts.map((part, i) => {
-                    if (part.includes("⌧")) {
-                        const match = part.match(/(⌧)([.,!?;:]*)/);
+                    if (part.includes("🗙")) {
+                        const match = part.match(/(🗙)([.,!?;:]*)/);
                         return {
                             originalWord: effectiveParts[i] || '',
                             newWord: match ? match[1] + (match[2] || '') : part,

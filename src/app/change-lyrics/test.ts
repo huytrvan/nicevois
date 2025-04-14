@@ -4,6 +4,7 @@ import {
     handleReplaceAll,
     handleLyricChange,
     countChangedWords,
+    getDistinctChangedWords,
     LyricLine,
     FormValues,
     generateLyricsData
@@ -34,6 +35,255 @@ if (typeof document === 'undefined') {
 describe('change-lyrics Integration Test', () => {
     beforeEach(() => {
         jest.resetAllMocks();
+    });
+    describe("Test countDistinctChangedWords", () => {
+        it('should count correctly', () => {
+            const lyrics: LyricLine[] = [
+                {
+                    "id": 40,
+                    "original": "Charali mannaji anhassdeoramyeon deol apeul tende, hmm (Ah, ah, ah, ah)",
+                    "modified": "Charali mannaji anhassdeoramyeon deol apeul tende, hmm (hey, hey, hey, hey)",
+                    "markedText": "Charali mannaji anhassdeoramyeon deol apeul tende, hmm (<span class=\"text-red-600\">hey</span>, <span class=\"text-red-600\">hey</span>, <span class=\"text-red-600\">hey</span>, <span class=\"text-red-600\">hey</span>)",
+                    "wordChanges": [
+                        {
+                            "originalWord": "Charali",
+                            "newWord": "Charali",
+                            "originalIndex": 0,
+                            "newIndex": 0,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "mannaji",
+                            "newWord": "mannaji",
+                            "originalIndex": 1,
+                            "newIndex": 1,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "anhassdeoramyeon",
+                            "newWord": "anhassdeoramyeon",
+                            "originalIndex": 2,
+                            "newIndex": 2,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "deol",
+                            "newWord": "deol",
+                            "originalIndex": 3,
+                            "newIndex": 3,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "apeul",
+                            "newWord": "apeul",
+                            "originalIndex": 4,
+                            "newIndex": 4,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "tende,",
+                            "newWord": "tende,",
+                            "originalIndex": 5,
+                            "newIndex": 5,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "hmm",
+                            "newWord": "hmm",
+                            "originalIndex": 6,
+                            "newIndex": 6,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "(",
+                            "newWord": "(",
+                            "originalIndex": 7,
+                            "newIndex": 7,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "Ah",
+                            "newWord": "hey",
+                            "originalIndex": 8,
+                            "newIndex": 8,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ",",
+                            "newWord": ",",
+                            "originalIndex": 9,
+                            "newIndex": 9,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "ah",
+                            "newWord": "hey",
+                            "originalIndex": 10,
+                            "newIndex": 10,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ",",
+                            "newWord": ",",
+                            "originalIndex": 11,
+                            "newIndex": 11,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "ah",
+                            "newWord": "hey",
+                            "originalIndex": 12,
+                            "newIndex": 12,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ",",
+                            "newWord": ",",
+                            "originalIndex": 13,
+                            "newIndex": 13,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "ah",
+                            "newWord": "hey",
+                            "originalIndex": 14,
+                            "newIndex": 14,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ")",
+                            "newWord": ")",
+                            "originalIndex": 15,
+                            "newIndex": 15,
+                            "hasChanged": false
+                        }
+                    ]
+                },
+                {
+                    "id": 41,
+                    "original": "Yeongweonhi hamkkehjadeon geu yak sok ijen (Ah, ah, ah, ah)",
+                    "modified": "Yeongweonhi hamkkehjadeon geu yak sok ijen (hey, hey, hey, hey)",
+                    "markedText": "Yeongweonhi hamkkehjadeon geu yak sok ijen (<span class=\"text-red-600\">hey</span>, <span class=\"text-red-600\">hey</span>, <span class=\"text-red-600\">hey</span>, <span class=\"text-red-600\">hey</span>)",
+                    "wordChanges": [
+                        {
+                            "originalWord": "Yeongweonhi",
+                            "newWord": "Yeongweonhi",
+                            "originalIndex": 0,
+                            "newIndex": 0,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "hamkkehjadeon",
+                            "newWord": "hamkkehjadeon",
+                            "originalIndex": 1,
+                            "newIndex": 1,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "geu",
+                            "newWord": "geu",
+                            "originalIndex": 2,
+                            "newIndex": 2,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "yak",
+                            "newWord": "yak",
+                            "originalIndex": 3,
+                            "newIndex": 3,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "sok",
+                            "newWord": "sok",
+                            "originalIndex": 4,
+                            "newIndex": 4,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "ijen",
+                            "newWord": "ijen",
+                            "originalIndex": 5,
+                            "newIndex": 5,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "(",
+                            "newWord": "(",
+                            "originalIndex": 6,
+                            "newIndex": 6,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "Ah",
+                            "newWord": "hey",
+                            "originalIndex": 7,
+                            "newIndex": 7,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ",",
+                            "newWord": ",",
+                            "originalIndex": 8,
+                            "newIndex": 8,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "ah",
+                            "newWord": "hey",
+                            "originalIndex": 9,
+                            "newIndex": 9,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ",",
+                            "newWord": ",",
+                            "originalIndex": 10,
+                            "newIndex": 10,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "ah",
+                            "newWord": "hey",
+                            "originalIndex": 11,
+                            "newIndex": 11,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ",",
+                            "newWord": ",",
+                            "originalIndex": 12,
+                            "newIndex": 12,
+                            "hasChanged": false
+                        },
+                        {
+                            "originalWord": "ah",
+                            "newWord": "hey",
+                            "originalIndex": 13,
+                            "newIndex": 13,
+                            "hasChanged": true,
+                            "isSubstitution": true
+                        },
+                        {
+                            "originalWord": ")",
+                            "newWord": ")",
+                            "originalIndex": 14,
+                            "newIndex": 14,
+                            "hasChanged": false
+                        }
+                    ]
+                }];
+            const distinctChangedWords: string[] = getDistinctChangedWords(lyrics);
+            expect(distinctChangedWords.length).toBe(1);
+
+        })
     });
     describe('handleLyricChange - Robust Tests', () => {
         // ----- English Tests -----
@@ -344,8 +594,8 @@ describe('change-lyrics Integration Test', () => {
 
             handleLyricChange(1, "Hi, !", setLyricsMock, setFormValuesMock);
             const updatedLyricsDel = setLyricsMock.mock.calls[1][0](initialLyrics);
-            expect(updatedLyricsDel[0].modified).toBe("Hi, ⌧!");
-            expect(updatedLyricsDel[0].markedText).toBe('Hi, <span class="text-red-600">⌧</span>!');
+            expect(updatedLyricsDel[0].modified).toBe("Hi, 🗙!");
+            expect(updatedLyricsDel[0].markedText).toBe('Hi, <span class="text-red-600">🗙</span>!');
             expect(countChangedWords(updatedLyricsDel[0])).toBe(1);
         });
 
@@ -356,8 +606,8 @@ describe('change-lyrics Integration Test', () => {
 
             handleLyricChange(1, "", setLyricsMock, setFormValuesMock);
             const updatedLyrics = setLyricsMock.mock.calls[0][0](initialLyrics);
-            expect(updatedLyrics[0].modified).toBe("⌧ ⌧ ⌧");
-            expect(updatedLyrics[0].markedText).toBe('<span class="text-red-600">⌧</span> <span class="text-red-600">⌧</span> <span class="text-red-600">⌧</span>');
+            expect(updatedLyrics[0].modified).toBe("🗙 🗙 🗙");
+            expect(updatedLyrics[0].markedText).toBe('<span class="text-red-600">🗙</span> <span class="text-red-600">🗙</span> <span class="text-red-600">🗙</span>');
             expect(countChangedWords(updatedLyrics[0])).toBe(3);
         });
 
@@ -368,8 +618,8 @@ describe('change-lyrics Integration Test', () => {
 
             handleLyricChange(1, "   ", setLyricsMock, setFormValuesMock);
             const updatedLyrics = setLyricsMock.mock.calls[0][0](initialLyrics);
-            expect(updatedLyrics[0].modified).toBe("⌧ ⌧");
-            expect(updatedLyrics[0].markedText).toBe('<span class="text-red-600">⌧</span> <span class="text-red-600">⌧</span>');
+            expect(updatedLyrics[0].modified).toBe("🗙 🗙");
+            expect(updatedLyrics[0].markedText).toBe('<span class="text-red-600">🗙</span> <span class="text-red-600">🗙</span>');
             expect(countChangedWords(updatedLyrics[0])).toBe(2);
         });
     });
@@ -677,7 +927,7 @@ Yeah
 
                 // Adjusted expected text - might need trim depending on implementation
                 const expectedModifiedL21 = "Hey, , , , , , , ,";
-                const expectedMarkedL21 = `Hey, <span class=\"text-red-600\">⌧</span>, <span class=\"text-red-600\">⌧</span>, <span class=\"text-red-600\">⌧</span>, <span class=\"text-red-600\">⌧</span>, <span class=\"text-red-600\">⌧</span>, <span class=\"text-red-600\">⌧</span>, <span class=\"text-red-600\">⌧</span>, <span class=\"text-red-600\">⌧</span>`;
+                const expectedMarkedL21 = `Hey, <span class=\"text-red-600\">🗙</span>, <span class=\"text-red-600\">🗙</span>, <span class=\"text-red-600\">🗙</span>, <span class=\"text-red-600\">🗙</span>, <span class=\"text-red-600\">🗙</span>, <span class=\"text-red-600\">🗙</span>, <span class=\"text-red-600\">🗙</span>, <span class=\"text-red-600\">🗙</span>`;
 
                 const stepSpecificExpectedStates: ExpectedLineState[] = [
                     { id: 20, modified: expectedModifiedL21, markedText: expectedMarkedL21, wordCount: 8 },
@@ -919,12 +1169,12 @@ Thành đạt thật nhiều ước mơ sẽ bay thật xa…`;
                 setFormValuesMock.mockImplementation(updater => { currentFormValuesState = updater(currentFormValuesState); });
                 handleReplaceAll('vui', '', setLyricsMock, setFormValuesMock);
                 const stepSpecificExpectedStates: ExpectedLineState[] = [
-                    { id: 4, modified: "Kể cho ta nghe bao buồn", markedText: "Kể cho <span class=\"text-red-600\">ta</span> nghe bao buồn <span class=\"text-red-600\">⌧</span>", wordCount: 2 },
-                    { id: 7, modified: "Cầu mong yên , vận may luôn theo", markedText: "Cầu mong yên <span class=\"text-red-600\">⌧</span>, vận may luôn theo", wordCount: 1 },
-                    { id: 10, modified: "Từng đàn chim tung cánh hót hân hoan vang trời", markedText: "Từng đàn chim tung cánh <span class=\"text-red-600\">⌧</span> hót hân hoan vang trời", wordCount: 1 },
-                    { id: 11, modified: "Cầu mong yên sẽ cho nhân gian nụ cười", markedText: "Cầu mong yên <span class=\"text-red-600\">⌧</span> sẽ cho nhân gian nụ cười", wordCount: 1 },
-                    { id: 12, modified: "Trẻ em khoe áo mới đón mùa tết", markedText: "Trẻ em khoe áo mới đón mùa tết <span class=\"text-red-600\">⌧</span>", wordCount: 1 },
-                    { id: 15, modified: "Tết đến rồi chúc ta yên 1 năm", markedText: "Tết đến rồi chúc <span class=\"text-red-600\">ta</span> yên <span class=\"text-red-600\">⌧</span> 1 năm", wordCount: 2 },
+                    { id: 4, modified: "Kể cho ta nghe bao buồn", markedText: "Kể cho <span class=\"text-red-600\">ta</span> nghe bao buồn <span class=\"text-red-600\">🗙</span>", wordCount: 2 },
+                    { id: 7, modified: "Cầu mong yên , vận may luôn theo", markedText: "Cầu mong yên <span class=\"text-red-600\">🗙</span>, vận may luôn theo", wordCount: 1 },
+                    { id: 10, modified: "Từng đàn chim tung cánh hót hân hoan vang trời", markedText: "Từng đàn chim tung cánh <span class=\"text-red-600\">🗙</span> hót hân hoan vang trời", wordCount: 1 },
+                    { id: 11, modified: "Cầu mong yên sẽ cho nhân gian nụ cười", markedText: "Cầu mong yên <span class=\"text-red-600\">🗙</span> sẽ cho nhân gian nụ cười", wordCount: 1 },
+                    { id: 12, modified: "Trẻ em khoe áo mới đón mùa tết", markedText: "Trẻ em khoe áo mới đón mùa tết <span class=\"text-red-600\">🗙</span>", wordCount: 1 },
+                    { id: 15, modified: "Tết đến rồi chúc ta yên 1 năm", markedText: "Tết đến rồi chúc <span class=\"text-red-600\">ta</span> yên <span class=\"text-red-600\">🗙</span> 1 năm", wordCount: 2 },
                 ];
                 assertReplaceAllResult(currentLyricsState, stepSpecificExpectedStates, 14, currentFormValuesState);
             });

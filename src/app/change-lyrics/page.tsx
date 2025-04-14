@@ -13,7 +13,7 @@ import { Toaster, toast } from 'sonner';
 import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
 import BackButton from '@/components/BackButton';
 import Image from 'next/image';
-import { handleReplaceAll, handleResetLyrics, handleLyricChange, handleResetLine, LyricLine, countChangedWords, generateLyricsData } from './utils';
+import { handleReplaceAll, handleResetLyrics, handleLyricChange, handleResetLine, LyricLine, getDistinctChangedWords, generateLyricsData } from './utils';
 
 
 // Create a wrapper component that uses useSearchParams
@@ -43,6 +43,7 @@ function ChangeLyricsPageContent() {
         lyrics: '',
     });
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    const [distinctChangedWords, setDistinctChangedWords] = useState<string[]>([]);
 
     const calculateCost = (wordChanges: number): number => {
         if (wordChanges <= 0) return 0;
@@ -53,9 +54,9 @@ function ChangeLyricsPageContent() {
     };
     // Updated totalWordChanges calculation
     const totalWordChanges = useMemo(() => {
-        return lyrics.reduce((sum, line) => {
-            return sum + countChangedWords(line);
-        }, 0);
+        const dcw: string[] = getDistinctChangedWords(lyrics);
+        setDistinctChangedWords(dcw);
+        return dcw.length;
     }, [lyrics]);
 
     // Calculate cost
@@ -311,10 +312,19 @@ function ChangeLyricsPageContent() {
             {!isError && (
                 <button
                     onClick={handleNextStep}
+                    disabled={isLoading}
                     className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
                     type="button"
                 >
-                    Change the Lyrics ${cost} <ChevronRight className="-mr-1 size-4 md:size-5" />
+                    {isLoading ? (
+                        "Processing..."
+                    ) : (
+                        <>
+                            Review Order <span className="font-bold text-lg">${cost}</span>
+                            <ChevronRight className="-mr-1 size-4 md:size-5" />
+                        </>
+                    )}
+
                 </button>
             )}
         </div>
@@ -447,9 +457,20 @@ function ChangeLyricsPageContent() {
 
                                         {/* Current Order */}
                                         <div className="bg-blue-900/40 rounded-md p-3 mb-2">
-                                            <p>Words Changed: {totalWordChanges}</p>
-                                            <p className='mt-2'>Total Cost:<span className="text-lg font-bold"> ${cost}</span></p>
+                                            <p className="mb-2">
+                                                Total Cost: <span className="text-lg font-bold">${cost}</span>
+                                            </p>
+
+                                            <p>
+                                                Lyrics Changes ({distinctChangedWords.length} word{distinctChangedWords.length > 1 ? 's' : ''})
+                                            </p>
+                                            {distinctChangedWords.length > 0 && (<p className=''>&quot;{
+                                                distinctChangedWords.map((word, index) => (
+                                                    <span key={index} className='inline-block mr-1'>{word} {index != distinctChangedWords.length - 1 ? ', ' : ''}</span>
+                                                ))
+                                            }&quot;</p>)}
                                         </div>
+
 
                                         {/* Pricing Tiers */}
                                         <div>
@@ -476,9 +497,9 @@ function ChangeLyricsPageContent() {
 
                                         {/* Footer */}
                                         <div className="mt-2 text-sm text-white/80">
-                                            <a href="nicevois.com/pricing" className="flex items-center gap-1 text-blue-200 hover:text-blue-100 w-fit underline text-sm" target="_blank">
+                                            <a href="https://nicevois.com/pages/pricing" className="text-blue-200 hover:text-blue-50 w-fit hover:underline text-sm inline-block" target="_blank">
                                                 Learn more about our pricing
-                                                <ExternalLink className="w-3 h-3 mt-1" />
+                                                <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
                                             </a>
                                         </div>
                                     </div>
