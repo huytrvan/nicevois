@@ -287,7 +287,7 @@ export async function POST(request: NextRequest) {
 
         _customAttributes.push({
             key: "* Lyrics Change",
-            value: `\n(Word changes: ${numWordChanged} word${numWordChanged > 1 ? 's' : ''}): "${formattedWordList}"\n${formattedLyricsChanges}`
+            value: `\n(Word changes: ${numWordChanged} word${numWordChanged > 1 ? 's' : ''}) "${formattedWordList}"\n${formattedLyricsChanges}`
         });
         if (specialRequests) _customAttributes.push({ key: "* Special Requests", value: `"${specialRequests}"` });
         _customAttributes.push({
@@ -300,6 +300,7 @@ export async function POST(request: NextRequest) {
             lineItems: [{
                 quantity: 1,
                 title: "Change Song Lyrics Service | Nicevois.com",
+                // originalUnitPrice: 0,
                 originalUnitPrice: String(price.toFixed(2)), // Standardized format
                 customAttributes: _customAttributes,
                 taxable: false

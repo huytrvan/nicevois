@@ -147,44 +147,66 @@ function OrderReviewPageContent() {
     // Compute distinct changed words
     const distinctChangedWords = useMemo(() => {
         // Helper function to normalize a word:
-        // It removes punctuation from the start and end, then converts to lowercase.
+        // It removes punctuation (and the deletion marker "🗙") from the start and end, then converts to lowercase.
         const normalizeWord = (word: string): string => {
             return word
-                .replace(/^[.,!?;:"'\[\]{}\(\)\-—_]+|[.,!?;:"'\[\]{}\(\)\-—_]+$/g, "")
+                .replace(/^[.,!?;:"'\[\]{}\(\)\-—_🗙]+|[.,!?;:"'\[\]{}\(\)\-—_]+$/g, "")
                 .toLowerCase();
         };
 
-        const uniqueWords = new Set<string>();
+        // Two sets: one for words added (or substituted) and one for words that only appear in deletion.
+        const additions = new Set<string>();
+        const deletions = new Set<string>();
 
-        // Loop over every lyric line.
         lyrics.forEach(line => {
-            // Depending on the text content, if it's not CJK, merge adjacent changes.
+            // Use merged changes for non-CJK; otherwise, use as-is.
             const changes = containsCJK(line.original)
                 ? line.wordChanges
                 : mergeAdjacentWordChanges(line.wordChanges);
 
             changes.forEach(change => {
                 if (change.hasChanged) {
-                    // For deletion changes, we add "🗙" before the normalized original word.
-                    if (change.isDeletion) {
-                        const originalNorm = normalizeWord(change.originalWord);
-                        if (originalNorm) uniqueWords.add(`🗙${originalNorm}`);
-                    }
-                    // For substitution and addition, use the modified (new) word.
-                    else if (change.isSubstitution || change.isAddition) {
+                    if (change.isSubstitution || change.isAddition) {
+                        // Record addition/substitution words in a normalized way (without any prefix).
                         const newNorm = normalizeWord(change.newWord);
-                        if (newNorm) uniqueWords.add(newNorm);
-                    }
-                    // Fallback: if no specific flag is set, default to using the modified (new) word.
-                    else {
+                        if (newNorm) {
+                            additions.add(newNorm);
+                        }
+                    } else if (change.isDeletion) {
+                        // Record deletions as normalized words.
+                        const originalNorm = normalizeWord(change.originalWord);
+                        if (originalNorm) {
+                            deletions.add(originalNorm);
+                        }
+                    } else {
+                        // Default fallback: treat as addition.
                         const fallbackNorm = normalizeWord(change.newWord);
-                        if (fallbackNorm) uniqueWords.add(fallbackNorm);
+                        if (fallbackNorm) {
+                            additions.add(fallbackNorm);
+                        }
                     }
                 }
             });
         });
 
-        return Array.from(uniqueWords);
+        // For deletions, if a word is found in the additions set,
+        // that means the same word was added elsewhere, so we do not want to use the deletion marker.
+        // We only want the "added" version (i.e. without the 🗙 prefix).
+        const finalDeletions = new Set<string>();
+        deletions.forEach(word => {
+            if (!additions.has(word)) {
+                finalDeletions.add(word);
+            }
+        });
+
+        // Combine the results: words from additions, and for words that appear only as deletion,
+        // prepend the "🗙" marker.
+        const result = new Set<string>([...additions]);
+        finalDeletions.forEach(word => {
+            result.add(`🗙${word}`);
+        });
+
+        return Array.from(result);
     }, [lyrics]); // Dependencies: Only depend on lyrics
 
     // Load data from localStorage
@@ -468,9 +490,9 @@ function OrderReviewPageContent() {
                             {/* Total Cost */}
                             <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border border-blue-300/50 bg-primary md:relative md:rounded-md md:bg-primary/80 mb-8 text-left text-white">
                                 <div className="p-4 flex">
-                                    <ShoppingCart className="w-6 h-6 text-white mt-[0.5] mr-3 ml-1" />
+                                    <ShoppingCart className="w-6 h-6 text-white mr-3 ml-1" />
                                     <p className="font-medium text-white md:block">
-                                        Total: <span className="font-bold text-xl">${calculateTotal().toFixed(2)}</span>
+                                        Total: <span className="font-bold text-xl">US${calculateTotal().toFixed(2)}</span>
                                     </p>
                                 </div>
                             </div>
@@ -494,7 +516,7 @@ function OrderReviewPageContent() {
                                 <div className="flex flex-col space-y-2 overflow-y-auto md:h-auto lg:h-full">
                                     {/* Display Lyrics Summary */}
                                     <div className="space-y-2 my-4">
-                                        <div className="py-8 px-4 bg-white">
+                                        <div className="pb-8 pt-4 px-4 bg-white">
                                             <h4 className="text-lg font-medium text-blue-800">Lyrics Changes ({distinctChangedWords.length} word{distinctChangedWords.length > 1 ? 's' : ''})</h4>
                                             {distinctChangedWords.length > 0 && (<p>&quot;{
                                                 distinctChangedWords.map((word, index) => (
@@ -577,10 +599,10 @@ function OrderReviewPageContent() {
                                                     </div>
                                                     {product.originalPrice !== undefined && (
                                                         <div className="flex gap-2 md:items-center">
-                                                            <span className="font-bold text-gray-700">+${product.price.toFixed(2)}</span>
+                                                            <span className="font-bold text-gray-700">+US${product.price.toFixed(2)}</span>
 
                                                             <span className="font-bold text-gray-400 line-through">
-                                                                ${product.originalPrice?.toFixed(2) ?? "0.00"}
+                                                                US${product.originalPrice?.toFixed(2) ?? "0.00"}
                                                             </span>
                                                         </div>
                                                     )}
