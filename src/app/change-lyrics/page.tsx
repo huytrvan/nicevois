@@ -126,10 +126,10 @@ function ChangeLyricsPageContent() {
         const fetchLyricsByTitleAndArtist = async (songTitle: string, songArtist: string) => {
             try {
                 setIsLoading(true);
-                const response = await fetch(`/api/genius/lyrics?track_name=${encodeURIComponent(songTitle)}&artist_name=${encodeURIComponent(songArtist)}`);
+                const response = await fetch(`/api/lyrics?track_name=${encodeURIComponent(songTitle)}&artist_name=${encodeURIComponent(songArtist)}`);
 
                 if (!response.ok) {
-                    toast.error('We had problem fetching the lyrics. Please go "back" and select "manual entry" tab.');
+                    toast.error('Our server is temporarily busy. Please look up song lyrics again in one minute or use "manual entry" tab. We appologize for any inconviniences');
                     setIsError(true);
                     throw new Error(`API error: ${response.status}`);
                 }
@@ -141,7 +141,7 @@ function ChangeLyricsPageContent() {
                     setOriginalLyricsText(data.lyrics);
                     setLyrics(generateLyricsData(data.lyrics));
                     setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
-                    console.log('API lyrics fetched and set successfully');
+                    // console.log('API lyrics fetched and set successfully');
                 } else {
                     setFormErrors(prev => ({ ...prev, general: 'Lyrics not found' }));
                     console.error('Lyrics not found from API');

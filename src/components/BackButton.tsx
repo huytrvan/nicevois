@@ -1,14 +1,40 @@
 "use client"; // Ensure this is a client component
 
 import { useRouter } from "next/navigation"; // Use useRouter for programmatic navigation
+import { useEffect } from "react";
 import { ChevronLeft } from "lucide-react";
 
 interface BackButtonProps {
     href: string;
+    enableReloadProtection?: boolean; // Optional prop to control reload protection
 }
 
-const BackButton: React.FC<BackButtonProps> = ({ href }) => {
+const BackButton: React.FC<BackButtonProps> = ({
+    href,
+    enableReloadProtection = true
+}) => {
     const router = useRouter();
+
+    // Add beforeunload event listener for reload/URL change protection
+    useEffect(() => {
+        if (!enableReloadProtection) return;
+
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            // Modern browsers ignore custom messages for security reasons
+            // They show their own generic message like "Reload site? Changes you made may not be saved."
+            e.preventDefault();
+            e.returnValue = ""; // Empty string or any truthy value triggers the dialog
+            return ""; // This return value is ignored by modern browsers
+        };
+
+        // Add the event listener
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        // Cleanup function to remove the event listener
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [enableReloadProtection]);
 
     const handleBackClick = () => {
         // Check if the href is "/" to show a reset warning
