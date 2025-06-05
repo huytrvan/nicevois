@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     try {
         const encodedTrack = encodeURIComponent(trackName);
         const encodedArtist = encodeURIComponent(artistName);
-        const apiUrl = `http://localhost:3000/musixmatch/lyrics-search?title=${encodedTrack}&artist=${encodedArtist}`;
+        const apiUrl = `${process.env.LYRICS_API_ADDRESS}/genius/lyrics?title=${encodedTrack}&artist=${encodedArtist}`;
 
         console.log('Fetching from URL:', apiUrl);
 
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
         }
 
         const data = await response.json() as ExternalLyricsResponse;
-        console.log('Received data structure:', Object.keys(data));
+        // console.log('Received data structure:', Object.keys(data));
 
         return new NextResponse(
             JSON.stringify({
