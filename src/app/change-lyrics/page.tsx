@@ -323,7 +323,7 @@ function ChangeLyricsPageContent() {
                 <button
                     onClick={handleNextStep}
                     disabled={isLoading}
-                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
+                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary/90 text-primary-foreground hover:bg-primary/80 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
                     type="button"
                 >
                     {isLoading ? (
@@ -405,7 +405,7 @@ function ChangeLyricsPageContent() {
                             {(songImage || songTitle || songArtist) && (
                                 <div className="p-4 bg-primary/10 rounded-lg flex flex-col sm:flex-row items-center gap-4" style={{ marginBottom: '0.75rem' }}>
                                     {songImage && (
-                                        <div className="relative w-40 h-40 flex-shrink-0" id="song-image-container">
+                                        <div className="relative w-40 h-40 flex-shrink-0 outline-2 outline-rose-900 shadow-sm rounded-lg" id="song-image-container">
                                             <Image
                                                 src={decodeURIComponent(songImage)}
                                                 alt={songTitle || "Song Image"}
@@ -429,12 +429,12 @@ function ChangeLyricsPageContent() {
                                     }
                                     < div className="flex flex-col items-center sm:items-start">
                                         {songTitle && (
-                                            <h4 className="text-white font-azbuka text-lg">
+                                            <h4 className="text-white font-azbuka text-lg tracking-normal">
                                                 {songTitle}
                                             </h4>
                                         )}
                                         {songArtist && (
-                                            <p className="text-white/80 font-roboto text-sm mt-1">
+                                            <p className="text-white/80 font-roboto text-sm mt-1 tracking-wide">
                                                 by {songArtist}
                                             </p>
                                         )}
@@ -443,13 +443,14 @@ function ChangeLyricsPageContent() {
                             )}
 
                             {/* Navigation Buttons */}
-                            <NavigationBtn />
-
-                            <Separator.Root
-                                className="shrink-0 dark:bg-gray-100/5 h-[1.5px] w-full my-3 md:my-4 bg-primary/10"
-                                orientation="horizontal"
-                                style={{ marginBottom: '0.25rem' }}
-                            />
+                            <div className=''>
+                                <NavigationBtn />
+                                <Separator.Root
+                                    className="shrink-0 dark:bg-gray-100/5 h-[1.5px] w-full my-3 md:my-4 bg-primary/10"
+                                    orientation="horizontal"
+                                    style={{ marginBottom: '0.25rem' }}
+                                />
+                            </div>
 
                             {/* Loading state */}
                             {isLoading && (
@@ -476,7 +477,7 @@ function ChangeLyricsPageContent() {
                                         </div>
 
                                         {/* Current Order */}
-                                        <div className="bg-blue-900/40 rounded-md p-3 mb-2">
+                                        <div className="bg-rose-900/40 rounded-md p-3 mb-2">
                                             <p className="mb-2">
                                                 Total Cost: <span className="text-lg font-bold">US${cost}</span>
                                             </p>
@@ -496,19 +497,19 @@ function ChangeLyricsPageContent() {
                                         <div>
                                             <h4 className="font-semibold mb-2">Pricing (based on distinct words, case-insensitive)</h4>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
-                                                <div className={`flex flex-col p-3  ${totalWordChanges <= 3 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                <div className={`flex flex-col p-3  ${totalWordChanges <= 3 ? 'bg-rose-800' : 'bg-rose-900/60  opacity-90'}`}>
                                                     <span className="text-sm text-white/90">1-3 words</span>
                                                     <span className="font-bold">US$45</span>
                                                 </div>
-                                                <div className={`flex flex-col p-3 ${totalWordChanges > 3 && totalWordChanges <= 10 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                <div className={`flex flex-col p-3 ${totalWordChanges > 3 && totalWordChanges <= 10 ? 'bg-rose-800' : 'bg-rose-900/60  opacity-90'}`}>
                                                     <span className="text-sm text-white/90">4-10 words</span>
                                                     <span className="font-bold">US$85</span>
                                                 </div>
-                                                <div className={`flex flex-col p-3 ${totalWordChanges > 10 && totalWordChanges <= 20 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                <div className={`flex flex-col p-3 ${totalWordChanges > 10 && totalWordChanges <= 20 ? 'bg-rose-800' : 'bg-rose-900/60  opacity-90'}`}>
                                                     <span className="text-sm text-white/90">11-20 words</span>
                                                     <span className="font-bold">US$125</span>
                                                 </div>
-                                                <div className={`flex flex-col p-3  ${totalWordChanges > 20 ? 'bg-blue-800' : 'bg-blue-900/60  opacity-90'}`}>
+                                                <div className={`flex flex-col p-3  ${totalWordChanges > 20 ? 'bg-rose-800' : 'bg-rose-900/60  opacity-90'}`}>
                                                     <span className="text-sm text-white/90">20+ words</span>
                                                     <span className="font-bold">US$165</span>
                                                 </div>
@@ -517,7 +518,7 @@ function ChangeLyricsPageContent() {
 
                                         {/* Footer */}
                                         <div className="mt-2 text-sm text-white/80">
-                                            <a href="https://nicevois.com/pages/pricing" className="text-blue-200 hover:text-blue-50 w-fit hover:underline text-sm inline-block" target="_blank">
+                                            <a href="https://nicevois.com/pages/pricing" className="text-rose-200 hover:text-rose-50 w-fit hover:underline text-sm inline-block" target="_blank">
                                                 Learn more about our pricing
                                                 <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
                                             </a>
@@ -535,7 +536,7 @@ function ChangeLyricsPageContent() {
                                                 <thead className="shadow sticky top-0 z-50 h-10 w-full border-b border-b-gray-200 bg-gray-100" style={{ transform: 'translateZ(0)' }}>
                                                     <tr className="border-b transition-colors data-[state=selected]:bg-muted">
                                                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 w-5 text-sm md:text-base">#</th>
-                                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 text-sm md:text-base">Original Lyrics</th>
+                                                        <th className="h-12 pl-3 pr-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 text-sm md:text-base">Original Lyrics</th>
                                                         <th className="h-12 px-0 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 w-10"><ArrowRight className="w-4 text-muted" /></th>
                                                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 text-sm md:text-base">Modified Lyrics</th>
                                                     </tr>
@@ -546,11 +547,11 @@ function ChangeLyricsPageContent() {
 
                                                         return (
                                                             <tr key={line.id} className="border-b transition-colors data-[state=selected]:bg-muted ">
-                                                                <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0 font-medium text-sm md:text-base text-muted">
+                                                                <td className="p-4 pr-2 align-middle [&:has([role=checkbox])]:pr-0 font-medium text-sm md:text-base text-muted">
                                                                     {line.id}
                                                                 </td>
                                                                 <td className="py-4 px-3 align-middle [&:has([role=checkbox])]:pr-0 text-sm md:text-base text-gray-900">
-                                                                    {line.original}
+                                                                    {isNonEditable ? line.original.replace(/&amp;/g, '&') : line.original}
                                                                 </td>
                                                                 <td className="px-0 py-4 align-middle [&:has([role=checkbox])]:pr-0">
                                                                     <ArrowRight className="w-4 text-muted" />
@@ -575,7 +576,7 @@ function ChangeLyricsPageContent() {
                                                                                 }
                                                                                 suppressContentEditableWarning={true}
                                                                                 dangerouslySetInnerHTML={{ __html: line.markedText || line.modified }}
-                                                                                className="flex-1 outline-none p-2 rounded ring-1 ring-blue-100 hover:ring-2 focus:ring-2 focus:ring-blue-500/50"
+                                                                                className="flex-1 outline-none p-2 rounded ring-1 ring-rose-200 hover:ring-2 focus:ring-2 focus:ring-rose-400/50"
                                                                             />
                                                                         )}
                                                                         {!isNonEditable && line.wordChanges.some((change) => change.hasChanged) && (
@@ -609,7 +610,7 @@ function ChangeLyricsPageContent() {
                                                     <p className="mt-3"> * Please insert your lyrics manually using the &quot;Manual Entry&quot; tab on the previous page.</p>
                                                     <p className='mt-3'>
                                                         * We sincerely apologize for this inconvenience and we would appreciate if you could report this to us{' '}
-                                                        <a href="https://nicevois.com/pages/contact" className="hover:underline text-blue-600" target="_blank">
+                                                        <a href="https://nicevois.com/pages/contact" className="hover:underline text-rose-600" target="_blank">
                                                             here
                                                             <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
                                                         </a>
@@ -624,7 +625,7 @@ function ChangeLyricsPageContent() {
                                     <button
                                         type="button"
                                         onClick={() => handleResetLyrics(setLyrics, setFormValues, toast)}
-                                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-blue-200 text-blue-900 hover:text-blue-200 hover:bg-blue-900 hover:ring-blue-500/50 focus-visible:ring focus-visible:ring-blue-500/50 active:bg-blue-700 active:ring-0 px-5 rounded-t-none rounded-b-md text-sm md:text-base h-10 md:h-12 w-full -mt-4 shadow"
+                                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-rose-200 text-rose-900 hover:text-rose-200 hover:bg-rose-900 hover:ring-rose-500/50 focus-visible:ring focus-visible:ring-rose-500/50 active:bg-rose-700 active:ring-0 px-5 rounded-t-none rounded-b-md text-sm md:text-base h-10 md:h-12 w-full -mt-4 shadow"
                                     >
                                         <Eraser className="w-4 h-4 opacity-85" /> Reset all to original lyrics
                                     </button>
@@ -641,19 +642,19 @@ function ChangeLyricsPageContent() {
                                                 value={replaceTerm}
                                                 onChange={(e) => setReplaceTerm(e.target.value)}
                                                 placeholder="Word to replace..."
-                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
+                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-rose-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
                                             />
                                             <input
                                                 type="text"
                                                 value={replaceWith}
                                                 onChange={(e) => setReplaceWith(e.target.value)}
                                                 placeholder="Replace with..."
-                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
+                                                className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-rose-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => handleReplaceAll(replaceTerm, replaceWith, setLyrics, setFormValues, toast)}
-                                                className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md text-sm md:text-base h-10 md:h-12 w-full sm:w-auto"
+                                                className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-primary/90 text-primary-foreground hover:bg-primary/50 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md text-sm md:text-base h-10 md:h-12 w-full sm:w-auto"
                                             >
                                                 Replace All
                                             </button>
@@ -667,7 +668,7 @@ function ChangeLyricsPageContent() {
                                         </label>
                                         <Form.Control asChild>
                                             <textarea
-                                                className="flex min-h-[80px] w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary mt-1"
+                                                className="flex min-h-[80px] w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-rose-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary mt-1"
                                                 rows={6}
                                                 value={specialRequests}
                                                 onChange={(e) => setSpecialRequests(e.target.value)}
@@ -685,7 +686,7 @@ function ChangeLyricsPageContent() {
 
                             {/* Tip Box */}
                             {!isLoading && (
-                                <div className="flex flex-col sm:flex-row items-start gap-3 rounded-lg bg-[#4B5EAA]/20 p-3 md:p-4 shadow-md border-blue-500 border" style={{ marginTop: '0rem', marginBottom: '0.5rem' }}>
+                                <div className="flex flex-col sm:flex-row items-start gap-3 rounded-lg bg-[#4B5EAA]/20 p-3 md:p-4 shadow-md border-rose-700 border" style={{ marginTop: '0rem', marginBottom: '0.5rem' }}>
                                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4B5EAA] text-lg flex-shrink-0">
                                         💡
                                     </div>

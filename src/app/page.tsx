@@ -93,7 +93,7 @@ const SearchResults = ({ results, isLoading, onSelect }: SearchResultsProps) => 
     }
 
     return (
-        <div className="relative overflow-hidden flex-1 w-full rounded-md border bg-white max-h-[calc(100vh-20rem)] md:max-h-[calc(100vh-22rem)] overflow-y-auto -mt-3 shadow-xl">
+        <div className="relative overflow-hidden flex-1 w-full rounded-md border border-rose-900 bg-white max-h-[calc(100vh-20rem)] md:max-h-[calc(100vh-22rem)] overflow-y-auto -mt-3 shadow-xl">
             <div className="min-w-full">
                 {results.map((song: Song) => (
                     <div key={song.id} className="relative cursor-pointer p-3 md:p-4 hover:bg-gray-200/20 transition-colors outline-1 border-spacing-0 -mb-1 border-b-2" onClick={() => onSelect(song)}>
@@ -200,9 +200,9 @@ const SearchPanel = () => {
                             <input
                                 className="flex w-full rounded-md border border-component-input
                                 h-10 md:h-12 pl-10 pr-8 text-sm md:text-base text-primary
-                                bg-foundation px-3 py-1 shadow-sm shadow-black/10 transition-colors text-gray-900
+                                bg-white px-3 py-1 shadow-sm shadow-black/10 transition-colors text-gray-900
                                 dark:bg-foundation-secondary dark:placeholder:text-muted/75
-                                focus-visible:outline-none focus-visible:ring focus-visible:ring-secondary/50"
+                                focus-visible:outline-none focus:ring-1 focus:ring-rose-950 focus-visible:ring-rose-950"
                                 type="text"
                                 placeholder="Search for a Song..."
                                 value={searchQuery}
@@ -234,7 +234,7 @@ const SearchPanel = () => {
                 />
             ) : selectedSong ? (
                 <div className="p-4 bg-primary/10 rounded-lg flex gap-3 items-center">
-                    <div className="relative w-40 h-40 md:w-32 md:h-32">
+                    <div className="relative w-40 h-40">
                         <Image
                             src={selectedSong.image}
                             alt={selectedSong.title}

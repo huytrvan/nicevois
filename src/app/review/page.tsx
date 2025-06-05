@@ -480,7 +480,18 @@ function OrderReviewPageContent() {
                                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
                                         type="button"
                                     >
-                                        <PackageCheck /> {isLoading ? "Processing..." : "Checkout"} <ChevronRight className="-mr-1 size-4 md:size-5" />
+                                        <PackageCheck />
+                                        {isLoading ? (
+                                            "Processing..."
+                                        ) : (
+                                            <>
+                                                Checkout{" "}
+                                                <span className="font-bold text-xl">
+                                                    US${calculateTotal().toFixed(2)}
+                                                </span>
+                                            </>
+                                        )}
+                                        <ChevronRight className="-mr-1 size-4 md:size-5" />
                                     </button>
                                 </div>
                             )}
@@ -491,11 +502,11 @@ function OrderReviewPageContent() {
                                 style={{ marginBottom: '0.25rem' }}
                             />
                             {/* Total Cost */}
-                            <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border border-blue-300/50 bg-primary md:relative md:rounded-md md:bg-primary/80 mb-8 text-left text-white py-1">
+                            <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border border-rose-300/50 bg-primary md:relative md:rounded-md md:bg-primary/80 mb-8 text-left text-white py-1">
                                 <div className="p-4 flex">
                                     <ShoppingCart className="w-6 h-6 text-white mr-3 ml-1" />
                                     <p className="font-medium text-white md:block">
-                                        Total: <span className="font-bold text-xl">US${calculateTotal().toFixed(2)}</span>
+                                        Total: <span className="font-bold text-lg">US${calculateTotal().toFixed(2)}</span>
                                     </p>
                                 </div>
                             </div>
@@ -520,7 +531,7 @@ function OrderReviewPageContent() {
                                     {/* Display Lyrics Summary */}
                                     <div className="space-y-2 my-3">
                                         <div className="pb-8 pt-4 px-4 bg-white">
-                                            <h4 className="text-lg font-medium text-blue-800">Lyrics Changes ({distinctChangedWords.length} word{distinctChangedWords.length > 1 ? 's' : ''})</h4>
+                                            <h4 className="text-lg font-medium text-rose-900">Lyrics Changes ({distinctChangedWords.length} word{distinctChangedWords.length > 1 ? 's' : ''})</h4>
                                             {distinctChangedWords.length > 0 && (<p>&quot;{
                                                 distinctChangedWords.map((word, index) => (
                                                     <span key={index} className='inline-block mr-1'>{word} {index != distinctChangedWords.length - 1 ? ', ' : ''}</span>
@@ -531,7 +542,7 @@ function OrderReviewPageContent() {
                                                     <table className="min-w-full border border-gray-200">
                                                         <thead className="bg-gray-100">
                                                             <tr>
-                                                                <th className="px-4 py-2 text-left text-sm font-medium text-primary border-b">Line #</th>
+                                                                <th className="px-3 py-2 text-left text-sm font-medium text-primary border-b">Line</th>
                                                                 <th className="px-4 py-2 text-left text-sm font-medium text-primary border-b">Original</th>
                                                                 <th className="px-4 py-2 text-left text-sm font-medium text-primary border-b">Modified</th>
                                                             </tr>
@@ -541,7 +552,7 @@ function OrderReviewPageContent() {
                                                                 .filter((line) => line.modified !== line.original)
                                                                 .map((line) => (
                                                                     <tr key={line.id} className="odd:bg-white even:bg-gray-50">
-                                                                        <td className="px-4 py-2 text-gray-500 font-mono border-b">{line.id}</td>
+                                                                        <td className="px-3 py-2 text-gray-500 font-mono border-b">{line.id}</td>
                                                                         <td className="px-4 py-2 text-gray-600 border-b">{line.original}</td>
                                                                         <td
                                                                             className="px-4 py-2 border-b"
@@ -563,7 +574,7 @@ function OrderReviewPageContent() {
                                     {/* Special Requests */}
                                     {specialRequests && (
                                         <div className="p-4 my-8 bg-white rounded-lg">
-                                            <h4 className="text-lg font-medium text-blue-800">Special Requests</h4>
+                                            <h4 className="text-lg font-medium text-rose-900">Special Requests</h4>
                                             <p className="text-sm text-gray-600">{specialRequests}</p>
                                         </div>
                                     )}
@@ -596,7 +607,7 @@ function OrderReviewPageContent() {
                                                             )}
                                                         </button>
                                                         <div className="ml-1 space-y-0.5">
-                                                            <span className="relative -top-0.5 font-medium text-blue-800 text-lg">{product.title}</span>
+                                                            <span className="relative -top-0.5 font-medium text-rose-900 text-lg">{product.title}</span>
                                                             <p className="text-sm text-gray-500">{product.description}</p>
                                                         </div>
                                                     </div>
@@ -629,7 +640,18 @@ function OrderReviewPageContent() {
                                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
                                         type="button"
                                     >
-                                        <PackageCheck /> {isLoading ? "Processing..." : "Checkout"} <ChevronRight className="-mr-1 size-4 md:size-5" />
+                                        <PackageCheck />
+                                        {isLoading ? (
+                                            "Processing..."
+                                        ) : (
+                                            <>
+                                                Checkout{" "}
+                                                <span className="font-bold text-lg">
+                                                    US${calculateTotal().toFixed(2)}
+                                                </span>
+                                            </>
+                                        )}
+                                        <ChevronRight className="-mr-1 size-4 md:size-5" />
                                     </button>
                                 </div>
                             )}
