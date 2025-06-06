@@ -7,7 +7,7 @@ const SHOP_ORIGINS = [
     'https://evjbcx-s0.myshopify.com',
     'https://nicevois.com',
     'https://nicevois-dev-test.vercel.app',
-    'https://nv-prod.vercel.app'
+    'https://nv-prod.vercel.app/'
 ];
 
 export default function IframeHeightManager() {
@@ -66,7 +66,7 @@ export default function IframeHeightManager() {
     const sendHeightToParent = useCallback((height: number) => {
         if (typeof window === 'undefined') return;
 
-        // Send height even if it's smaller than the last height (FIX #2)
+        // CRITICAL: Always send height changes, even if smaller (for shrinking content)
         // Only skip if the height is exactly the same
         if (height === lastHeightRef.current) return;
 
@@ -78,29 +78,36 @@ export default function IframeHeightManager() {
             height: height,
             timestamp: Date.now(),
             source: 'IframeHeightManager',
-            forceUpdate: true // Add flag to force update regardless of size
+            forceUpdate: true,
+            heightChange: height > lastHeightRef.current ? 'increase' : 'decrease' // Track direction
         };
 
-        // Optimized: Use requestAnimationFrame for smoother updates
-        requestAnimationFrame(() => {
+        // Send immediately for height reductions, use RAF for increases to prevent stuttering
+        const sendMessage = () => {
             // Try sending to all possible parent origins
             SHOP_ORIGINS.forEach(origin => {
                 try {
                     window.parent.postMessage(message, origin);
-                    // Reduce console logging for performance
                     // console.log(`Height message sent to ${origin}:`, height);
                 } catch (error) {
                     console.warn(`Failed to send message to ${origin}:`, error);
                 }
             });
 
-            // Also try sending to '*' as fallback (less secure but sometimes necessary)
+            // Also try sending to '*' as fallback
             try {
                 window.parent.postMessage(message, '*');
             } catch (error) {
                 console.warn('Failed to send wildcard message:', error);
             }
-        });
+        };
+
+        // Send height reductions immediately, throttle increases
+        if (height < lastHeightRef.current) {
+            sendMessage(); // Immediate for shrinking
+        } else {
+            requestAnimationFrame(sendMessage); // Throttled for growing
+        }
     }, []);
 
     const calculateAndSendHeight = useCallback(() => {
