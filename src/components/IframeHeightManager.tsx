@@ -6,6 +6,7 @@ const SHOP_ORIGINS = [
     "https://evjbcx-s0.myshopify.com",
     "https://nicevois.com",
     "https://nicevois-dev-test.vercel.app",
+    'https://nv-prod.vercel.app',
 ];
 
 export default function IframeHeightManager() {
