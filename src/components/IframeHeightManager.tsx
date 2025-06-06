@@ -6,7 +6,8 @@ import { useEffect, useRef, useCallback } from 'react';
 const SHOP_ORIGINS = [
     'https://evjbcx-s0.myshopify.com',
     'https://nicevois.com',
-    'https://nicevois-dev-test.vercel.app' // Add your dev URL
+    'https://nicevois-dev-test.vercel.app',
+    'https://nv-prod.vercel.app'
 ];
 
 export default function IframeHeightManager() {
@@ -80,32 +81,36 @@ export default function IframeHeightManager() {
             forceUpdate: true // Add flag to force update regardless of size
         };
 
-        // Try sending to all possible parent origins
-        SHOP_ORIGINS.forEach(origin => {
+        // Optimized: Use requestAnimationFrame for smoother updates
+        requestAnimationFrame(() => {
+            // Try sending to all possible parent origins
+            SHOP_ORIGINS.forEach(origin => {
+                try {
+                    window.parent.postMessage(message, origin);
+                    // Reduce console logging for performance
+                    // console.log(`Height message sent to ${origin}:`, height);
+                } catch (error) {
+                    console.warn(`Failed to send message to ${origin}:`, error);
+                }
+            });
+
+            // Also try sending to '*' as fallback (less secure but sometimes necessary)
             try {
-                window.parent.postMessage(message, origin);
-                console.log(`Height message sent to ${origin}:`, height);
+                window.parent.postMessage(message, '*');
             } catch (error) {
-                console.warn(`Failed to send message to ${origin}:`, error);
+                console.warn('Failed to send wildcard message:', error);
             }
         });
-
-        // Also try sending to '*' as fallback (less secure but sometimes necessary)
-        try {
-            window.parent.postMessage(message, '*');
-        } catch (error) {
-            console.warn('Failed to send wildcard message:', error);
-        }
     }, []);
 
     const calculateAndSendHeight = useCallback(() => {
         if (!isEmbeddedInShopify()) return;
 
-        // Add small delay to ensure DOM is fully rendered
-        setTimeout(() => {
+        // Use requestAnimationFrame for smoother timing
+        requestAnimationFrame(() => {
             const height = getDocumentHeight();
             sendHeightToParent(height);
-        }, 10);
+        });
     }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent]);
 
     // Initialize height management
@@ -121,11 +126,16 @@ export default function IframeHeightManager() {
             setTimeout(calculateAndSendHeight, delay)
         );
 
-        // Set up ResizeObserver
+        // Set up ResizeObserver with throttling
         if (window.ResizeObserver && !observerRef.current) {
+            let resizeTimeout: NodeJS.Timeout | null = null;
+
             observerRef.current = new ResizeObserver(() => {
-                // Debounce the height calculation
-                setTimeout(calculateAndSendHeight, 50);
+                // Throttle resize events to prevent excessive calls
+                if (resizeTimeout) clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    calculateAndSendHeight();
+                }, 16); // ~60fps
             });
 
             // Observe both body and document element
@@ -137,8 +147,10 @@ export default function IframeHeightManager() {
             }
         }
 
-        // Set up MutationObserver for DOM changes
+        // Set up MutationObserver for DOM changes with throttling
         if (!mutationObserverRef.current) {
+            let mutationTimeout: NodeJS.Timeout | null = null;
+
             mutationObserverRef.current = new MutationObserver((mutations) => {
                 // Check if any mutation actually affects layout
                 const affectsLayout = mutations.some(mutation =>
@@ -148,7 +160,11 @@ export default function IframeHeightManager() {
                 );
 
                 if (affectsLayout) {
-                    setTimeout(calculateAndSendHeight, 100);
+                    // Throttle mutation events
+                    if (mutationTimeout) clearTimeout(mutationTimeout);
+                    mutationTimeout = setTimeout(() => {
+                        calculateAndSendHeight();
+                    }, 16); // ~60fps
                 }
             });
 
@@ -160,19 +176,23 @@ export default function IframeHeightManager() {
             });
         }
 
-        // Window resize handler
+        // Window resize handler with throttling
+        let resizeThrottle: NodeJS.Timeout | null = null;
         const handleResize = () => {
-            setTimeout(calculateAndSendHeight, 100);
+            if (resizeThrottle) clearTimeout(resizeThrottle);
+            resizeThrottle = setTimeout(() => {
+                calculateAndSendHeight();
+            }, 16); // ~60fps
         };
 
         // Window load handler
         const handleLoad = () => {
-            setTimeout(calculateAndSendHeight, 200);
+            setTimeout(calculateAndSendHeight, 100);
         };
 
         // DOM content loaded handler
         const handleDOMContentLoaded = () => {
-            setTimeout(calculateAndSendHeight, 100);
+            setTimeout(calculateAndSendHeight, 50);
         };
 
         window.addEventListener('resize', handleResize);
@@ -201,12 +221,12 @@ export default function IframeHeightManager() {
         };
     }, [calculateAndSendHeight, isEmbeddedInShopify]);
 
-    // Handle React state changes that might affect height
+    // Handle React state changes that might affect height with throttling
     useEffect(() => {
         if (!isEmbeddedInShopify()) return;
 
-        // Recalculate height after any state change
-        const timer = setTimeout(calculateAndSendHeight, 50);
+        // Throttle state change updates
+        const timer = setTimeout(calculateAndSendHeight, 16); // ~60fps
         return () => clearTimeout(timer);
     });
 
