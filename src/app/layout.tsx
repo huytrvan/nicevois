@@ -13,7 +13,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en">
+        <html lang="en" id="main-content" style={{ height: 'auto', minHeight: '0', overflow: 'hidden' }}>
             <body className="antialiased pt-12 pb-20">
                 {children}
                 <IframeHeightManager />
