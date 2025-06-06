@@ -35,7 +35,7 @@ export default function IframeHeightManager() {
 
         const mainContent = document.getElementById("main-content");
         if (mainContent) {
-            const height = mainContent.scrollHeight;
+            const height = mainContent.scrollHeight + 20; // add 20px padding
             console.log("Main content height:", height);
             console.log("OffsetHeight:", mainContent.offsetHeight);
             console.log("ClientHeight:", mainContent.clientHeight);
@@ -107,8 +107,10 @@ export default function IframeHeightManager() {
     const calculateAndSendHeight = useCallback(() => {
         if (!isEmbeddedInShopify()) return;
         requestAnimationFrame(() => {
-            const height = getDocumentHeight();
-            sendHeightToParent(height);
+            setTimeout(() => {
+                const height = getDocumentHeight();
+                sendHeightToParent(height);
+            }, 100);  // 100ms delay
         });
     }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent]);
 
