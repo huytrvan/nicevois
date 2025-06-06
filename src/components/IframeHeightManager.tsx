@@ -72,11 +72,11 @@ export default function IframeHeightManager() {
         };
 
         const sendMessage = () => {
-            SHOP_ORIGINS.forEach((origin) => {
+            SHOP_ORIGINS.forEach((origin, index) => {
                 try {
                     window.parent.postMessage(message, origin);
                 } catch (error) {
-                    console.warn(`Failed to send message to ${origin}:`, error);
+                    console.warn(`Failed to send message to #${index}:`, error);
                 }
             });
             // Optionally remove this wildcard for better security
