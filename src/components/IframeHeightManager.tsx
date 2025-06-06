@@ -6,8 +6,7 @@ import { useEffect, useRef, useCallback } from 'react';
 const SHOP_ORIGINS = [
     'https://evjbcx-s0.myshopify.com',
     'https://nicevois.com',
-    'https://nicevois-dev-test.vercel.app',
-    'https://nv-prod.vercel.app/'
+    'https://nicevois-dev-test.vercel.app' // Add your dev URL
 ];
 
 export default function IframeHeightManager() {
@@ -66,10 +65,11 @@ export default function IframeHeightManager() {
     const sendHeightToParent = useCallback((height: number) => {
         if (typeof window === 'undefined') return;
 
-        // CRITICAL: Always send height changes, even if smaller (for shrinking content)
+        // CRITICAL: Always send height changes, including reductions
         // Only skip if the height is exactly the same
         if (height === lastHeightRef.current) return;
 
+        const previousHeight = lastHeightRef.current;
         lastHeightRef.current = height;
 
         // Enhanced message sending with error handling
@@ -79,16 +79,16 @@ export default function IframeHeightManager() {
             timestamp: Date.now(),
             source: 'IframeHeightManager',
             forceUpdate: true,
-            heightChange: height > lastHeightRef.current ? 'increase' : 'decrease' // Track direction
+            previousHeight: previousHeight // Send previous height for comparison
         };
 
-        // Send immediately for height reductions, use RAF for increases to prevent stuttering
+        // Send message function
         const sendMessage = () => {
             // Try sending to all possible parent origins
             SHOP_ORIGINS.forEach(origin => {
                 try {
                     window.parent.postMessage(message, origin);
-                    // console.log(`Height message sent to ${origin}:`, height);
+                    console.log(`Height message sent to ${origin}: ${previousHeight} -> ${height}`);
                 } catch (error) {
                     console.warn(`Failed to send message to ${origin}:`, error);
                 }
@@ -102,12 +102,8 @@ export default function IframeHeightManager() {
             }
         };
 
-        // Send height reductions immediately, throttle increases
-        if (height < lastHeightRef.current) {
-            sendMessage(); // Immediate for shrinking
-        } else {
-            requestAnimationFrame(sendMessage); // Throttled for growing
-        }
+        // Always send immediately - let the parent handle throttling if needed
+        sendMessage();
     }, []);
 
     const calculateAndSendHeight = useCallback(() => {
