@@ -65,9 +65,9 @@ export default function IframeHeightManager() {
     const sendHeightToParent = useCallback((height: number) => {
         if (typeof window === 'undefined') return;
 
-        // Only send if height has changed significantly
-        const heightDifference = Math.abs(height - lastHeightRef.current);
-        if (heightDifference < 5) return;
+        // Send height even if it's smaller than the last height (FIX #2)
+        // Only skip if the height is exactly the same
+        if (height === lastHeightRef.current) return;
 
         lastHeightRef.current = height;
 
@@ -76,7 +76,8 @@ export default function IframeHeightManager() {
             type: 'iframe-height',
             height: height,
             timestamp: Date.now(),
-            source: 'IframeHeightManager'
+            source: 'IframeHeightManager',
+            forceUpdate: true // Add flag to force update regardless of size
         };
 
         // Try sending to all possible parent origins
