@@ -35,7 +35,7 @@ export default function IframeHeightManager() {
 
         const mainContent = document.getElementById("main-content");
         if (mainContent) {
-            const height = mainContent.scrollHeight + 20; // add 20px padding
+            const height = mainContent.scrollHeight + 150; // add 150px padding
             console.log("Main content height:", height);
             console.log("OffsetHeight:", mainContent.offsetHeight);
             console.log("ClientHeight:", mainContent.clientHeight);
