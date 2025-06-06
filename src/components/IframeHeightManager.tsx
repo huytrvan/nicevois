@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useRef, useCallback } from "react";
 
-const SHOP_ORIGINS = (process.env.SHOP_ORIGINS as string).split(',');
+console.log(process.env.SHOP_ORIGINS)
+const SHOP_ORIGINS = String(process.env.SHOP_ORIGINS).split(',');
 
+console.log(SHOP_ORIGINS);
 if (SHOP_ORIGINS.length < 1) {
     throw new Error("Missing SHOP_ORIGINS environment variable");
 }
