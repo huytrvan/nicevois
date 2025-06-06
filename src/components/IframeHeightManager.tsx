@@ -36,9 +36,9 @@ export default function IframeHeightManager() {
         const mainContent = document.getElementById("main-content");
         if (mainContent) {
             const height = mainContent.scrollHeight + 150; // add 150px padding
-            console.log("Main content height:", height);
-            console.log("OffsetHeight:", mainContent.offsetHeight);
-            console.log("ClientHeight:", mainContent.clientHeight);
+            // console.log("Main content height:", height);
+            // console.log("OffsetHeight:", mainContent.offsetHeight);
+            // console.log("ClientHeight:", mainContent.clientHeight);
             return height;
         }
 
@@ -54,7 +54,7 @@ export default function IframeHeightManager() {
         ].filter((h) => h > 0);
 
         const maxHeight = Math.max(...heights);
-        console.log("Fallback heights:", heights);
+        // console.log("Fallback heights:", heights);
         return Math.max(maxHeight, 200);
     }, []);
 
@@ -66,7 +66,7 @@ export default function IframeHeightManager() {
         const diff = height - previousHeight;
 
         // Log every change for debugging
-        console.log(`Height change detected: ${previousHeight} -> ${height} (${diff}px), Reduction: ${isReduction}`);
+        // console.log(`Height change detected: ${previousHeight} -> ${height} (${diff}px), Reduction: ${isReduction}`);
 
         // Always send updates, even small ones, for testing
         lastHeightRef.current = height;
@@ -86,9 +86,9 @@ export default function IframeHeightManager() {
             SHOP_ORIGINS.forEach((origin) => {
                 try {
                     window.parent.postMessage(message, origin);
-                    console.log(
-                        `Height ${isReduction ? "REDUCTION" : "increase"} sent to ${origin}: ${previousHeight} -> ${height} (${diff > 0 ? "+" : ""}${diff}px)`
-                    );
+                    // console.log(
+                    //     `Height ${isReduction ? "REDUCTION" : "increase"} sent to ${origin}: ${previousHeight} -> ${height} (${diff > 0 ? "+" : ""}${diff}px)`
+                    // );
                 } catch (error) {
                     console.warn(`Failed to send message to ${origin}:`, error);
                 }
