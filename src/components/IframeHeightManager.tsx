@@ -1,9 +1,9 @@
+// components/IframeHeightManager.tsx
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
 
-const SHOP_ORIGIN = 'https://my-cool-shop.myshopify.com';
-const NEXT_APP_ORIGIN = 'https://my-next-app.vercel.app';
+const SHOP_ORIGINS = ['https://evjbcx-s0.myshopify.com', 'https://nicevois.com'];
 
 export default function IframeHeightManager() {
     const lastHeightRef = useRef<number>(0);
@@ -13,8 +13,7 @@ export default function IframeHeightManager() {
     // Check if we're embedded in the correct Shopify origin
     const isEmbeddedInShopify = useCallback(() => {
         try {
-            return window.parent !== window &&
-                window.location.origin === NEXT_APP_ORIGIN;
+            return window.parent !== window;
         } catch (error) {
             // Cross-origin restrictions might prevent this check
             console.error(error as string);
@@ -37,11 +36,13 @@ export default function IframeHeightManager() {
         if (Math.abs(height - lastHeightRef.current) > 5) {
             lastHeightRef.current = height;
 
-            // Send message to parent window with specific origin
-            window.parent.postMessage({
-                type: 'iframe-height',
-                height: height
-            }, SHOP_ORIGIN);
+            // Send message to each allowed parent origin
+            SHOP_ORIGINS.forEach(origin => {
+                window.parent.postMessage({
+                    type: 'iframe-height',
+                    height: height
+                }, origin);
+            });
         }
     }, []);
 
