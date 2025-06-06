@@ -37,8 +37,15 @@ export default function IframeHeightManager() {
             return 400;
         }
 
-        const { body, documentElement: html } = document;
+        // Prioritize the height of the main content container
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) {
+            console.log('Main content height:', mainContent.scrollHeight);
+            return mainContent.scrollHeight;
+        }
 
+        // Fallback to original method if main-content div is not found
+        const { body, documentElement: html } = document;
         const heights = [
             body.scrollHeight,
             body.offsetHeight,
@@ -50,6 +57,7 @@ export default function IframeHeightManager() {
         ].filter(h => h > 0);
 
         const maxHeight = Math.max(...heights);
+        console.log('Fallback height:', maxHeight);
         return Math.max(maxHeight, 200);
     }, []);
 
@@ -59,9 +67,7 @@ export default function IframeHeightManager() {
         const previousHeight = lastHeightRef.current;
         const isReduction = height < previousHeight;
 
-        // CRITICAL: For reductions, always send even if very small difference
-        // For increases, only send if difference is meaningful
-        const threshold = isReduction ? 0 : 5; // No threshold for reductions, 5px for increases
+        const threshold = isReduction ? 0 : 5;
 
         if (Math.abs(height - previousHeight) < threshold) return;
 
@@ -72,7 +78,7 @@ export default function IframeHeightManager() {
             height: height,
             timestamp: Date.now(),
             source: 'IframeHeightManager',
-            forceUpdate: isReduction, // Force update for reductions
+            forceUpdate: isReduction,
             previousHeight: previousHeight,
             isReduction: isReduction,
             heightDiff: height - previousHeight
@@ -95,7 +101,6 @@ export default function IframeHeightManager() {
             }
         };
 
-        // CRITICAL: Send reductions immediately, slight delay for increases
         if (isReduction) {
             sendMessage();
         } else {
@@ -106,39 +111,31 @@ export default function IframeHeightManager() {
     const calculateAndSendHeight = useCallback(() => {
         if (!isEmbeddedInShopify()) return;
 
-        // Use requestAnimationFrame for smoother timing
         requestAnimationFrame(() => {
             const height = getDocumentHeight();
             sendHeightToParent(height);
         });
     }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent]);
 
-    // Initialize height management
     useEffect(() => {
         if (typeof window === 'undefined' || isInitializedRef.current) return;
         if (!isEmbeddedInShopify()) return;
 
         isInitializedRef.current = true;
 
-        // More aggressive initial height calculations
         const initialDelays = [0, 50, 100, 200, 300, 500, 1000, 2000];
         const timeoutIds = initialDelays.map(delay =>
             setTimeout(calculateAndSendHeight, delay)
         );
 
-        // Enhanced ResizeObserver with faster response for reductions
         if (window.ResizeObserver && !observerRef.current) {
             let resizeTimeout: NodeJS.Timeout | null = null;
 
             observerRef.current = new ResizeObserver(() => {
-                // Clear any pending timeout
                 if (resizeTimeout) clearTimeout(resizeTimeout);
 
-                // Get current height to determine if it's a reduction
                 const currentHeight = getDocumentHeight();
                 const isReduction = currentHeight < lastHeightRef.current;
-
-                // Immediate response for reductions, slight delay for increases
                 const delay = isReduction ? 0 : 16;
 
                 resizeTimeout = setTimeout(() => {
@@ -154,14 +151,12 @@ export default function IframeHeightManager() {
             }
         }
 
-        // Enhanced MutationObserver with better layout change detection
         if (!mutationObserverRef.current) {
             let mutationTimeout: NodeJS.Timeout | null = null;
 
             mutationObserverRef.current = new MutationObserver((mutations) => {
                 const affectsLayout = mutations.some(mutation => {
                     if (mutation.type === 'childList') {
-                        // Check for meaningful DOM changes
                         return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
                     }
                     if (mutation.type === 'attributes') {
@@ -174,7 +169,6 @@ export default function IframeHeightManager() {
                 if (affectsLayout) {
                     if (mutationTimeout) clearTimeout(mutationTimeout);
 
-                    // Check if this might be a reduction
                     const currentHeight = getDocumentHeight();
                     const isReduction = currentHeight < lastHeightRef.current;
                     const delay = isReduction ? 0 : 16;
@@ -193,7 +187,6 @@ export default function IframeHeightManager() {
             });
         }
 
-        // Enhanced window resize handler
         let resizeThrottle: NodeJS.Timeout | null = null;
         const handleResize = () => {
             if (resizeThrottle) clearTimeout(resizeThrottle);
@@ -240,7 +233,6 @@ export default function IframeHeightManager() {
         };
     }, [calculateAndSendHeight, isEmbeddedInShopify, getDocumentHeight]);
 
-    // Enhanced React state change handler
     useEffect(() => {
         if (!isEmbeddedInShopify()) return;
 
