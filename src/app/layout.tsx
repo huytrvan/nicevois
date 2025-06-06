@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import IframeHeightManager from "../components/IframeHeightManager";
 
 export const metadata: Metadata = {
     title: "Create Next App",
@@ -13,10 +14,9 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body
-                className="antialiased pt-12 pb-20"
-            >
+            <body className="antialiased pt-12 pb-20">
                 {children}
+                <IframeHeightManager />
             </body>
         </html>
     );
