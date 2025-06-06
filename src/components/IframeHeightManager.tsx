@@ -1,13 +1,11 @@
 "use client";
-
 import { useEffect, useRef, useCallback } from "react";
 
-const SHOP_ORIGINS = [
-    "https://evjbcx-s0.myshopify.com",
-    "https://nicevois.com",
-    "https://nicevois-dev-test.vercel.app",
-    'https://nv-prod.vercel.app',
-];
+const SHOP_ORIGINS = (process.env.SHOP_ORIGINS as string).split(',');
+
+if (SHOP_ORIGINS.length < 1) {
+    throw new Error("Missing SHOP_ORIGINS environment variable");
+}
 
 export default function IframeHeightManager() {
     const lastHeightRef = useRef<number>(0);
@@ -36,11 +34,7 @@ export default function IframeHeightManager() {
 
         const mainContent = document.getElementById("main-content");
         if (mainContent) {
-            const height = mainContent.scrollHeight + 150; // add 150px padding
-            // console.log("Main content height:", height);
-            // console.log("OffsetHeight:", mainContent.offsetHeight);
-            // console.log("ClientHeight:", mainContent.clientHeight);
-            return height;
+            return mainContent.scrollHeight + 150; // add 150px padding
         }
 
         const { body, documentElement: html } = document;
@@ -54,9 +48,7 @@ export default function IframeHeightManager() {
             window.innerHeight,
         ].filter((h) => h > 0);
 
-        const maxHeight = Math.max(...heights);
-        // console.log("Fallback heights:", heights);
-        return Math.max(maxHeight, 200);
+        return Math.max(...heights, 200);
     }, []);
 
     const sendHeightToParent = useCallback((height: number) => {
@@ -66,10 +58,6 @@ export default function IframeHeightManager() {
         const isReduction = height < previousHeight;
         const diff = height - previousHeight;
 
-        // Log every change for debugging
-        // console.log(`Height change detected: ${previousHeight} -> ${height} (${diff}px), Reduction: ${isReduction}`);
-
-        // Always send updates, even small ones, for testing
         lastHeightRef.current = height;
 
         const message = {
@@ -87,21 +75,14 @@ export default function IframeHeightManager() {
             SHOP_ORIGINS.forEach((origin) => {
                 try {
                     window.parent.postMessage(message, origin);
-                    // console.log(
-                    //     `Height ${isReduction ? "REDUCTION" : "increase"} sent to ${origin}: ${previousHeight} -> ${height} (${diff > 0 ? "+" : ""}${diff}px)`
-                    // );
                 } catch (error) {
                     console.warn(`Failed to send message to ${origin}:`, error);
                 }
             });
-            try {
-                window.parent.postMessage(message, "*");
-            } catch (error) {
-                console.warn("Failed to send wildcard message:", error);
-            }
+            // Optionally remove this wildcard for better security
+            // window.parent.postMessage(message, "*");
         };
 
-        // Immediate send for reductions, slight delay for increases
         setTimeout(sendMessage, isReduction ? 0 : 16);
     }, []);
 
@@ -111,7 +92,7 @@ export default function IframeHeightManager() {
             setTimeout(() => {
                 const height = getDocumentHeight();
                 sendHeightToParent(height);
-            }, 100);  // 100ms delay
+            }, 100); // 100ms delay
         });
     }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent]);
 
