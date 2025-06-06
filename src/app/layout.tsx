@@ -1,3 +1,4 @@
+// src\app\layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import IframeHeightManager from "../components/IframeHeightManager";
@@ -12,17 +13,9 @@ export default function RootLayout({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    // Check if running on localhost
-    const isLocalhost = typeof window !== 'undefined' &&
-        (window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.hostname === '');
-
-    const paddingClasses = isLocalhost ? 'pt-12 pb-20' : '';
-
     return (
         <html lang="en">
-            <body className={`antialiased ${paddingClasses}`}>
+            <body className="antialiased">
                 <div
                     id="main-content"
                     style={{ height: "auto", minHeight: "0", overflow: "visible" }}
