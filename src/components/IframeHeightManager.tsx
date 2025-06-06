@@ -15,13 +15,18 @@ export default function IframeHeightManager() {
         try {
             return window.parent !== window;
         } catch (error) {
+            console.log(error as string)
             // Cross-origin restrictions might prevent this check
-            console.error(error as string);
             return window.parent !== window;
         }
     }, []);
 
     const getDocumentHeight = useCallback(() => {
+        // Only run on client-side
+        if (typeof window === 'undefined' || typeof document === 'undefined') {
+            return 400; // Default height for SSR
+        }
+
         const { body, documentElement: html } = document;
         return Math.max(
             body.scrollHeight,
@@ -32,16 +37,25 @@ export default function IframeHeightManager() {
     }, []);
 
     const sendHeightToParent = useCallback((height: number) => {
+        // Only run on client-side
+        if (typeof window === 'undefined') {
+            return;
+        }
+
         // Only send if height has changed significantly (avoid spam)
         if (Math.abs(height - lastHeightRef.current) > 5) {
             lastHeightRef.current = height;
 
             // Send message to each allowed parent origin
             SHOP_ORIGINS.forEach(origin => {
-                window.parent.postMessage({
-                    type: 'iframe-height',
-                    height: height
-                }, origin);
+                try {
+                    window.parent.postMessage({
+                        type: 'iframe-height',
+                        height: height
+                    }, origin);
+                } catch (error) {
+                    console.error('Failed to send message to parent:', error);
+                }
             });
         }
     }, []);
@@ -57,6 +71,11 @@ export default function IframeHeightManager() {
     }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent]);
 
     useEffect(() => {
+        // Only run on client-side
+        if (typeof window === 'undefined') {
+            return;
+        }
+
         // Early return if not embedded in Shopify
         if (!isEmbeddedInShopify()) {
             return;
@@ -66,7 +85,7 @@ export default function IframeHeightManager() {
         calculateAndSendHeight();
 
         // Set up ResizeObserver to watch for content changes
-        if (typeof window !== 'undefined' && window.ResizeObserver) {
+        if (window.ResizeObserver) {
             observerRef.current = new ResizeObserver(() => {
                 calculateAndSendHeight();
             });
@@ -130,8 +149,8 @@ export default function IframeHeightManager() {
         };
     }, [calculateAndSendHeight, isEmbeddedInShopify]);
 
-    // Don't render anything if not embedded in Shopify
-    if (!isEmbeddedInShopify()) {
+    // Don't render anything if not on client-side or not embedded in Shopify
+    if (typeof window === 'undefined' || !isEmbeddedInShopify()) {
         return null;
     }
 
