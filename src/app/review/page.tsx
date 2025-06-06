@@ -89,13 +89,13 @@ function containsCJK(text: string): boolean {
     return /[\u3000-\u303F\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(text);
 }
 
-interface CheckoutBtnProps {
+interface CheckoutButtonProps {
     handleCheckout: () => void;
     isLoading: boolean;
     calculateTotal: () => number;
 }
 
-const CheckoutBtn: React.FC<CheckoutBtnProps> = ({ handleCheckout, isLoading, calculateTotal }) => {
+const CheckoutButton: React.FC<CheckoutButtonProps> = ({ handleCheckout, isLoading, calculateTotal }) => {
     return (
         <button
             onClick={handleCheckout}
@@ -504,7 +504,7 @@ function OrderReviewPageContent() {
                             {!isLoading && (
                                 <div className="flex flex-row items-center gap-2 py-0">
                                     <BackButton href="/change-lyrics" />
-                                    <CheckoutBtn handleCheckout={handleCheckout} isLoading={isLoading} calculateTotal={calculateTotal} />
+                                    <CheckoutButton handleCheckout={handleCheckout} isLoading={isLoading} calculateTotal={calculateTotal} />
                                 </div>
                             )}
 
@@ -646,7 +646,7 @@ function OrderReviewPageContent() {
                             {!isLoading && (
                                 <div className="flex flex-row items-center gap-2 py-0">
                                     <BackButton href="/change-lyrics" />
-                                    <CheckoutBtn handleCheckout={handleCheckout} isLoading={isLoading} calculateTotal={calculateTotal} />
+                                    <CheckoutButton handleCheckout={handleCheckout} isLoading={isLoading} calculateTotal={calculateTotal} />
                                 </div>
                             )}
                         </Tabs.Content>
