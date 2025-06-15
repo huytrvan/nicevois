@@ -26,9 +26,6 @@ export default function RootLayout({
                         __html: `
                             (function() {
                                 const allowedOrigins = ${JSON.stringify(SHOP_ORIGINS)};
-                                const isInIframe = window.self !== window.top;
-                                
-                                if (isInIframe) {
                                     const isLocalhost = window.location.hostname === 'localhost' ||
                                         window.location.hostname === '127.0.0.1'
                                     
@@ -65,7 +62,6 @@ export default function RootLayout({
                                             return;
                                         }
                                     }
-                                }
                             })();
                         `,
                     }}
