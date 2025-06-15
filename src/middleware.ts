@@ -4,12 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Get the origin from the request headers
+    // Get headers
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
     const host = request.headers.get('host');
 
-    // Add debug logging
+    // Debug logging
     console.log('Middleware Debug:', {
         pathname,
         origin,
@@ -18,9 +18,8 @@ export function middleware(request: NextRequest) {
         isApiRoute: pathname.startsWith('/api/')
     });
 
-    // Get allowed shop origins from environment variable
+    // Load allowed origins from environment
     const shopOriginsEnv = process.env.NEXT_PUBLIC_SHOP_ORIGINS;
-
     if (!shopOriginsEnv) {
         console.error('NEXT_PUBLIC_SHOP_ORIGINS environment variable is not set');
         return NextResponse.json(
@@ -28,43 +27,32 @@ export function middleware(request: NextRequest) {
             { status: 500 }
         );
     }
-
     const allowedOrigins = shopOriginsEnv.split(',').map(origin => origin.trim());
 
-    // Check if request is coming from an allowed origin
+    // Function to check if a URL’s origin is allowed
     const isAllowedOrigin = (url: string | null): boolean => {
         if (!url) return false;
-
         try {
             const requestOrigin = new URL(url).origin;
-            return allowedOrigins.some(allowedOrigin => {
-                return requestOrigin === allowedOrigin;
-            });
+            return allowedOrigins.some(allowedOrigin => requestOrigin === allowedOrigin);
         } catch (error) {
             console.error('Error parsing origin:', error);
             return false;
         }
     };
 
-    // Check if the current host is a vercel.app domain
-    const isVercelDomain = host?.endsWith('.vercel.app') || host === 'vercel.app';
-
     // Check if this is an API route
     const isApiRoute = pathname.startsWith('/api/');
 
-    // For API routes, use simpler logic
+    // Handle API routes
     if (isApiRoute) {
-        // Allow API calls if:
-        // 1. Origin is from allowed origins
-        // 2. Referer is from allowed origins  
-        // 3. No origin/referer (server-side calls)
-        // 4. Same host (same-origin calls)
+        const appOrigin = `https://${host}`;
+        const isSameOrigin = referer && referer.startsWith(appOrigin);
         const isValidApiCall =
-            isAllowedOrigin(origin) ||
-            isAllowedOrigin(referer) ||
-            (!origin && !referer) ||
-            (origin && origin.includes(host || '')) ||
-            (referer && referer.includes(host || ''));
+            isAllowedOrigin(origin) ||           // Cross-origin from allowed origin
+            isAllowedOrigin(referer) ||          // Referer origin is allowed
+            (!origin && !referer) ||             // Server-side calls
+            isSameOrigin;                        // Same-origin calls from iframe
 
         if (!isValidApiCall) {
             console.warn(`Blocked API request from unauthorized origin: ${origin || referer || 'unknown'} to ${pathname}`);
@@ -73,13 +61,13 @@ export function middleware(request: NextRequest) {
                 { status: 403 }
             );
         }
-
         return NextResponse.next();
     }
 
-    // For non-API routes (pages), check if direct access to Vercel domain should be blocked
+    // Handle non-API routes (pages)
+    const isVercelDomain = host?.endsWith('.vercel.app') || host === 'vercel.app';
     if (isVercelDomain) {
-        // Block direct access to Vercel domains if there's an origin/referer that's not allowed
+        // Block direct access unless from an allowed origin
         if ((origin || referer) && !isAllowedOrigin(origin) && !isAllowedOrigin(referer)) {
             console.warn(`Blocked direct access to Vercel domain: ${host} from ${origin || referer || 'direct access'}`);
             return NextResponse.json(
@@ -89,11 +77,9 @@ export function middleware(request: NextRequest) {
         }
     }
 
-    // For non-API routes, check origin authorization
+    // Allow iframe embedding or valid requests
     const isValidRequest = isAllowedOrigin(origin) || isAllowedOrigin(referer);
     const isIframeRequest = !origin && !referer;
-
-    // Allow iframe requests or valid origin requests
     if (!isValidRequest && !isIframeRequest) {
         console.warn(`Blocked page request from unauthorized origin: ${origin || referer || 'unknown'} to ${pathname}`);
         return NextResponse.json(
@@ -102,10 +88,8 @@ export function middleware(request: NextRequest) {
         );
     }
 
-    // Set security headers for iframe embedding
+    // Set security headers for non-API routes
     const response = NextResponse.next();
-
-    // Only set CSP headers for HTML pages, not for API routes or static assets
     if (!pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
         const frameAncestors = allowedOrigins.join(' ');
         response.headers.set('Content-Security-Policy', `frame-ancestors ${frameAncestors};`);
@@ -115,16 +99,9 @@ export function middleware(request: NextRequest) {
     return response;
 }
 
-// Configure which routes the middleware should run on
+// Middleware configuration
 export const config = {
     matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * This will now protect ALL pages AND API routes
-         */
         '/((?!_next/static|_next/image|favicon.ico).*)',
     ],
 };
