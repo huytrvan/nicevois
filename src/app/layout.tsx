@@ -15,7 +15,12 @@ export default function RootLayout({
     return (
         <html lang="en">
             <body className="antialiased">
-                {children}
+                <div
+                    id="main-content"
+                    style={{ height: "auto", minHeight: "0", overflow: "visible" }}
+                >
+                    {children}
+                </div>
                 <IframeHeightManager />
             </body>
         </html>
