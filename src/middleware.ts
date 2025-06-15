@@ -65,6 +65,16 @@ export function middleware(request: NextRequest) {
         return false;
     };
 
+    // For API routes, be more permissive with same-origin checks
+    const isApiRoute = pathname.startsWith('/api/');
+    const isSameOriginApiRequest = isApiRoute && (
+        isSameOrigin() ||
+        // Allow API calls without origin/referer (common in server-side requests)
+        (!origin && !referer) ||
+        // Allow API calls from the same host via referer
+        (referer && referer.includes(host || ''))
+    );
+
     // Check if the current host is a vercel.app domain
     const isVercelDomain = (): boolean => {
         return host?.endsWith('.vercel.app') || host === 'vercel.app';
@@ -89,8 +99,8 @@ export function middleware(request: NextRequest) {
     // Allow same-origin requests (your own site making requests to itself)
     const isSameOriginRequest = isSameOrigin();
 
-    // Allow valid requests OR iframe requests OR iframe from allowed origins OR same-origin requests
-    if (!isValidRequest && !isIframeRequest && !isIframeFromAllowedOrigin && !isSameOriginRequest) {
+    // Allow valid requests OR iframe requests OR iframe from allowed origins OR same-origin requests OR same-origin API requests
+    if (!isValidRequest && !isIframeRequest && !isIframeFromAllowedOrigin && !isSameOriginRequest && !isSameOriginApiRequest) {
         console.warn(`Blocked request from unauthorized origin: ${origin || referer || 'unknown'} to ${pathname}`);
         return NextResponse.json(
             { error: 'Unauthorized origin' },
