@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className="antialiased pt-12 pb-20">
+            <body className="antialiased">
                 {children}
                 <IframeHeightManager />
             </body>
