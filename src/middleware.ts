@@ -70,11 +70,12 @@ export function middleware(request: NextRequest) {
         return host?.endsWith('.vercel.app') || host === 'vercel.app';
     };
 
-    // Check if this is likely an iframe request (no origin/referer headers)
+    // Check if this is likely an iframe request (no origin/referer headers OR referer from allowed origin)
     const isIframeRequest = !origin && !referer;
+    const isIframeFromAllowedOrigin = !origin && referer && isAllowedOrigin(referer);
 
-    // Block direct access to vercel.app domains when not in iframe
-    if (isVercelDomain() && !isIframeRequest) {
+    // Block direct access to vercel.app domains when not in iframe from allowed origin
+    if (isVercelDomain() && !isIframeRequest && !isIframeFromAllowedOrigin) {
         console.warn(`Blocked direct access to Vercel domain: ${host} from ${origin || referer || 'direct access'}`);
         return NextResponse.json(
             { error: 'Direct access not allowed. This app must be accessed through authorized channels.' },
@@ -88,8 +89,8 @@ export function middleware(request: NextRequest) {
     // Allow same-origin requests (your own site making requests to itself)
     const isSameOriginRequest = isSameOrigin();
 
-    // Allow valid requests OR iframe requests OR same-origin requests
-    if (!isValidRequest && !isIframeRequest && !isSameOriginRequest) {
+    // Allow valid requests OR iframe requests OR iframe from allowed origins OR same-origin requests
+    if (!isValidRequest && !isIframeRequest && !isIframeFromAllowedOrigin && !isSameOriginRequest) {
         console.warn(`Blocked request from unauthorized origin: ${origin || referer || 'unknown'} to ${pathname}`);
         return NextResponse.json(
             { error: 'Unauthorized origin' },
