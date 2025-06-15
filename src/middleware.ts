@@ -9,6 +9,15 @@ export function middleware(request: NextRequest) {
     const referer = request.headers.get('referer');
     const host = request.headers.get('host');
 
+    // Add debug logging
+    console.log('Middleware Debug:', {
+        pathname,
+        origin,
+        referer,
+        host,
+        isApiRoute: pathname.startsWith('/api/')
+    });
+
     // Get allowed shop origins from environment variable
     const shopOriginsEnv = process.env.NEXT_PUBLIC_SHOP_ORIGINS;
 
@@ -29,7 +38,6 @@ export function middleware(request: NextRequest) {
         try {
             const requestOrigin = new URL(url).origin;
             return allowedOrigins.some(allowedOrigin => {
-                // Exact match for specific domains
                 return requestOrigin === allowedOrigin;
             });
         } catch (error) {
@@ -38,70 +46,56 @@ export function middleware(request: NextRequest) {
         }
     };
 
-    // Check if this is a same-origin request (from your own domain)
-    const isSameOrigin = (): boolean => {
-        if (!host) return false;
-
-        // Check if origin matches the current host
-        if (origin) {
-            try {
-                const originUrl = new URL(origin);
-                return originUrl.host === host;
-            } catch {
-                return false;
-            }
-        }
-
-        // Check if referer matches the current host
-        if (referer) {
-            try {
-                const refererUrl = new URL(referer);
-                return refererUrl.host === host;
-            } catch {
-                return false;
-            }
-        }
-
-        return false;
-    };
-
-    // For API routes, be more permissive with same-origin checks
-    const isApiRoute = pathname.startsWith('/api/');
-    const isSameOriginApiRequest = isApiRoute && (
-        isSameOrigin() ||
-        // Allow API calls without origin/referer (common in server-side requests)
-        (!origin && !referer) ||
-        // Allow API calls from the same host via referer
-        (referer && referer.includes(host || ''))
-    );
-
     // Check if the current host is a vercel.app domain
-    const isVercelDomain = (): boolean => {
-        return host?.endsWith('.vercel.app') || host === 'vercel.app';
-    };
+    const isVercelDomain = host?.endsWith('.vercel.app') || host === 'vercel.app';
 
-    // Check if this is likely an iframe request (no origin/referer headers OR referer from allowed origin)
-    const isIframeRequest = !origin && !referer;
-    const isIframeFromAllowedOrigin = !origin && referer && isAllowedOrigin(referer);
+    // Check if this is an API route
+    const isApiRoute = pathname.startsWith('/api/');
 
-    // Block direct access to vercel.app domains when not in iframe from allowed origin
-    if (isVercelDomain() && !isIframeRequest && !isIframeFromAllowedOrigin) {
-        console.warn(`Blocked direct access to Vercel domain: ${host} from ${origin || referer || 'direct access'}`);
-        return NextResponse.json(
-            { error: 'Direct access not allowed. This app must be accessed through authorized channels.' },
-            { status: 403 }
-        );
+    // For API routes, use simpler logic
+    if (isApiRoute) {
+        // Allow API calls if:
+        // 1. Origin is from allowed origins
+        // 2. Referer is from allowed origins  
+        // 3. No origin/referer (server-side calls)
+        // 4. Same host (same-origin calls)
+        const isValidApiCall =
+            isAllowedOrigin(origin) ||
+            isAllowedOrigin(referer) ||
+            (!origin && !referer) ||
+            (origin && origin.includes(host || '')) ||
+            (referer && referer.includes(host || ''));
+
+        if (!isValidApiCall) {
+            console.warn(`Blocked API request from unauthorized origin: ${origin || referer || 'unknown'} to ${pathname}`);
+            return NextResponse.json(
+                { error: 'Unauthorized API access' },
+                { status: 403 }
+            );
+        }
+
+        return NextResponse.next();
     }
 
-    // Check both origin and referer headers
+    // For non-API routes (pages), check if direct access to Vercel domain should be blocked
+    if (isVercelDomain) {
+        // Block direct access to Vercel domains if there's an origin/referer that's not allowed
+        if ((origin || referer) && !isAllowedOrigin(origin) && !isAllowedOrigin(referer)) {
+            console.warn(`Blocked direct access to Vercel domain: ${host} from ${origin || referer || 'direct access'}`);
+            return NextResponse.json(
+                { error: 'Direct access not allowed. This app must be accessed through authorized channels.' },
+                { status: 403 }
+            );
+        }
+    }
+
+    // For non-API routes, check origin authorization
     const isValidRequest = isAllowedOrigin(origin) || isAllowedOrigin(referer);
+    const isIframeRequest = !origin && !referer;
 
-    // Allow same-origin requests (your own site making requests to itself)
-    const isSameOriginRequest = isSameOrigin();
-
-    // Allow valid requests OR iframe requests OR iframe from allowed origins OR same-origin requests OR same-origin API requests
-    if (!isValidRequest && !isIframeRequest && !isIframeFromAllowedOrigin && !isSameOriginRequest && !isSameOriginApiRequest) {
-        console.warn(`Blocked request from unauthorized origin: ${origin || referer || 'unknown'} to ${pathname}`);
+    // Allow iframe requests or valid origin requests
+    if (!isValidRequest && !isIframeRequest) {
+        console.warn(`Blocked page request from unauthorized origin: ${origin || referer || 'unknown'} to ${pathname}`);
         return NextResponse.json(
             { error: 'Unauthorized origin' },
             { status: 403 }
@@ -113,10 +107,9 @@ export function middleware(request: NextRequest) {
 
     // Only set CSP headers for HTML pages, not for API routes or static assets
     if (!pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
-        // Always set CSP headers to control iframe embedding
         const frameAncestors = allowedOrigins.join(' ');
         response.headers.set('Content-Security-Policy', `frame-ancestors ${frameAncestors};`);
-        response.headers.set('X-Frame-Options', 'DENY'); // This will be overridden by CSP but provides fallback
+        response.headers.set('X-Frame-Options', 'DENY');
     }
 
     return response;
