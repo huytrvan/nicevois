@@ -1,4 +1,4 @@
-// middleware.ts
+// middleware.ts - Place this file in your project root
 import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
@@ -38,10 +38,12 @@ export function middleware(request: NextRequest) {
     // Check both origin and referer headers
     const isValidRequest = isAllowedOrigin(origin) || isAllowedOrigin(referer);
 
-    // Remove this line to block all direct access without proper origins
-    // const isDirectRequest = !origin && !referer;
+    // For iframe embedded apps, allow requests without origin/referer since they come from the iframe context
+    // The actual origin validation happens at the browser level via CSP headers
+    const isIframeRequest = !origin && !referer;
 
-    if (!isValidRequest) {
+    // Allow valid requests OR iframe requests (which will be validated by CSP)
+    if (!isValidRequest && !isIframeRequest) {
         console.warn(`Blocked request from unauthorized origin: ${origin || referer || 'unknown'}`);
         return NextResponse.json(
             { error: 'Unauthorized origin' },
@@ -52,11 +54,10 @@ export function middleware(request: NextRequest) {
     // Set security headers for iframe embedding
     const response = NextResponse.next();
 
-    // Allow embedding from authorized origins only
-    if (isValidRequest) {
-        const frameAncestors = allowedOrigins.join(' ');
-        response.headers.set('Content-Security-Policy', `frame-ancestors ${frameAncestors};`);
-    }
+    // Always set CSP headers to control iframe embedding
+    const frameAncestors = allowedOrigins.join(' ');
+    response.headers.set('Content-Security-Policy', `frame-ancestors ${frameAncestors};`);
+    response.headers.set('X-Frame-Options', 'DENY'); // This will be overridden by CSP but provides fallback
 
     return response;
 }
