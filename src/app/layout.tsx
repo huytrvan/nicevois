@@ -1,4 +1,3 @@
-// src\app\layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import IframeHeightManager from "../components/IframeHeightManager";
@@ -13,9 +12,64 @@ export default function RootLayout({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    // if (process.env.NEXT_PUBLIC_SHOP_ORIGINS == undefined) {
+    //     throw new Error("Missing SHOP_ORIGINS environment variable");
+    // }
+
+    // const SHOP_ORIGINS = String(process.env.NEXT_PUBLIC_SHOP_ORIGINS).split(',');
+    const SHOP_ORIGINS = ['Amazon.com'];
     return (
         <html lang="en">
             <body className="antialiased">
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
+                            (function() {
+                                const allowedOrigins = ${JSON.stringify(SHOP_ORIGINS)};
+                                const isInIframe = window.self !== window.top;
+                                
+                                if (isInIframe) {
+                                    const isLocalhost = window.location.hostname === 'localhost' ||
+                                        window.location.hostname === '127.0.0.1'
+                                    
+                                    if (!isLocalhost) {
+                                        try {
+                                            const referrer = document.referrer;
+                                            const parentOrigin = referrer ? new URL(referrer).origin : null;
+                                            
+                                            if (!parentOrigin || !allowedOrigins.includes(parentOrigin)) {
+                                                document.getElementById('main-content').innerHTML = \`
+                                                    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; font-family: system-ui, sans-serif; text-align: center; padding: 20px;">
+                                                        <h1 style="font-size: 48px; margin: 0 0 16px 0; color: #dc2626;">401</h1>
+                                                        <h2 style="font-size: 24px; margin: 0 0 16px 0; color: #374151;">Unauthorized Access</h2>
+                                                        <p style="font-size: 16px; color: #6b7280; max-width: 400px;">
+                                                            This application can only be embedded on authorized domains. 
+                                                            Please contact the administrator if you believe this is an error.
+                                                        </p>
+                                                    </div>
+                                                \`;
+                                                return;
+                                            }
+                                        } catch (error) {
+                                            console.error('Origin check failed:', error);
+                                            document.getElementById('main-content').innerHTML = \`
+                                                <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; font-family: system-ui, sans-serif; text-align: center; padding: 20px;">
+                                                    <h1 style="font-size: 48px; margin: 0 0 16px 0; color: #dc2626;">401</h1>
+                                                    <h2 style="font-size: 24px; margin: 0 0 16px 0; color: #374151;">Unauthorized Access</h2>
+                                                    <p style="font-size: 16px; color: #6b7280; max-width: 400px;">
+                                                        This application can only be embedded on authorized domains. 
+                                                        Please contact the administrator if you believe this is an error.
+                                                    </p>
+                                                </div>
+                                            \`;
+                                            return;
+                                        }
+                                    }
+                                }
+                            })();
+                        `,
+                    }}
+                />
                 <div
                     id="main-content"
                     style={{ height: "auto", minHeight: "0", overflow: "visible" }}
