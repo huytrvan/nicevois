@@ -20,7 +20,8 @@ export function middleware(request: NextRequest) {
         );
     }
 
-    const allowedOrigins = shopOriginsEnv.split(',').map(origin => origin.trim());
+    // const allowedOrigins = shopOriginsEnv.split(',').map(origin => origin.trim());
+    const allowedOrigins = ["Google.com", 'Amazon.com'];
 
     // Check if request is coming from an allowed origin
     const isAllowedOrigin = (url: string | null): boolean => {
