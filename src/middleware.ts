@@ -20,8 +20,7 @@ export function middleware(request: NextRequest) {
         );
     }
 
-    // const allowedOrigins = shopOriginsEnv.split(',').map(origin => origin.trim());
-    const allowedOrigins = ["Google.com", 'Amazon.com'];
+    const allowedOrigins = shopOriginsEnv.split(',').map(origin => origin.trim());
 
     // Check if request is coming from an allowed origin
     const isAllowedOrigin = (url: string | null): boolean => {
@@ -66,11 +65,25 @@ export function middleware(request: NextRequest) {
         return false;
     };
 
+    // Check if the current host is a vercel.app domain
+    const isVercelDomain = (): boolean => {
+        return host?.endsWith('.vercel.app') || host === 'vercel.app';
+    };
+
+    // Check if this is likely an iframe request (no origin/referer headers)
+    const isIframeRequest = !origin && !referer;
+
+    // Block direct access to vercel.app domains when not in iframe
+    if (isVercelDomain() && !isIframeRequest) {
+        console.warn(`Blocked direct access to Vercel domain: ${host} from ${origin || referer || 'direct access'}`);
+        return NextResponse.json(
+            { error: 'Direct access not allowed. This app must be accessed through authorized channels.' },
+            { status: 403 }
+        );
+    }
+
     // Check both origin and referer headers
     const isValidRequest = isAllowedOrigin(origin) || isAllowedOrigin(referer);
-
-    // For iframe embedded apps, allow requests without origin/referer since they come from the iframe context
-    const isIframeRequest = !origin && !referer;
 
     // Allow same-origin requests (your own site making requests to itself)
     const isSameOriginRequest = isSameOrigin();
