@@ -798,8 +798,7 @@ export function handleReplaceAll(
     // and call the toast only once.
     setTimeout(() => {
         if (totalReplacements > 0) {
-            // because there is a bug with totalReplacements, we must divide by 2
-            toast?.success(`Replaced ${Number(totalReplacements / 2)} instance(s) of "${replaceTerm}" with "${replaceWith}"`);
+            toast?.success(`Replaced ${Number(totalReplacements)} instance(s) of "${replaceTerm}" with "${replaceWith}"`);
         } else {
             toast?.info(`"${replaceTerm}" not found`);
         }

@@ -1,7 +1,7 @@
 // src\app\change-lyrics\page.tsx
 "use client";
 
-import { useState, useEffect, Suspense, useMemo } from 'react';
+import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
 import { ChevronRight, ListMusic, ArrowRight, Eraser, ExternalLink, ArrowLeft } from 'lucide-react';
@@ -310,6 +310,34 @@ function ChangeLyricsPageContent() {
         }
     };
 
+    const replaceAllTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const handleReplaceAllClick = useCallback((e: React.MouseEvent) => {
+        // Prevent default and stop propagation
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Clear any existing timeout
+        if (replaceAllTimeoutRef.current) {
+            clearTimeout(replaceAllTimeoutRef.current);
+        }
+
+        // Debounce the call with a small delay
+        replaceAllTimeoutRef.current = setTimeout(() => {
+            console.log('Executing Replace All...');
+            handleReplaceAll(replaceTerm, replaceWith, setLyrics, setFormValues, toast);
+        }, 100);
+    }, [replaceTerm, replaceWith, setLyrics, setFormValues]);
+
+    // Clean up timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (replaceAllTimeoutRef.current) {
+                clearTimeout(replaceAllTimeoutRef.current);
+            }
+        };
+    }, []);
+
 
     // Define step data
     const steps: StepProps[] = [
@@ -551,7 +579,7 @@ function ChangeLyricsPageContent() {
                                                                     {line.id}
                                                                 </td>
                                                                 <td className="py-4 px-3 align-middle [&:has([role=checkbox])]:pr-0 text-sm md:text-base text-gray-900">
-                                                                    {line.original}
+                                                                    {line.original.replace(/&amp;/g, '&')}
                                                                 </td>
                                                                 <td className="px-0 py-4 align-middle [&:has([role=checkbox])]:pr-0">
                                                                     <ArrowRight className="w-4 text-muted" />
@@ -659,7 +687,8 @@ function ChangeLyricsPageContent() {
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => handleReplaceAll(replaceTerm, replaceWith, setLyrics, setFormValues, toast)}
+                                                onClick={handleReplaceAllClick}
+                                                // onClick={() => handleReplaceAll(replaceTerm, replaceWith, setLyrics, setFormValues, toast)}
                                                 className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md text-sm md:text-base h-10 md:h-12 w-full sm:w-auto"
                                             >
                                                 Replace All
