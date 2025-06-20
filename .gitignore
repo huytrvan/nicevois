@@ -42,3 +42,6 @@ next-env.d.ts
 
 # custom folders
 /.backup/
+
+# testing file
+src/app/test/
