@@ -3,7 +3,8 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ChevronRight, ListMusic, ArrowRight, Eraser, ExternalLink } from 'lucide-react';
+import Link from "next/link";
+import { ChevronRight, ListMusic, ArrowRight, Eraser, ExternalLink, ArrowLeft } from 'lucide-react';
 import React from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
@@ -615,6 +616,12 @@ function ChangeLyricsPageContent() {
                                                         </a>
                                                         . Thank you!
                                                     </p>
+                                                    <div className="mt-6">
+                                                        <Link href="/" className="inline-flex items-center text-blue-600 hover:underline">
+                                                            <ArrowLeft className="w-4 h-4 mr-2" />
+                                                            Go back to previous page
+                                                        </Link>
+                                                    </div>
                                                 </div>
                                             )}
 
