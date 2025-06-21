@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, PackageCheck, ShoppingCart } from 'lucide-react';
+import { Check, ChevronRight, PackageCheck, ShoppingCart, ChevronDown, ChevronUp, Download, ExternalLink } from 'lucide-react';
 import React from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Separator from "@radix-ui/react-separator";
@@ -89,6 +89,7 @@ function containsCJK(text: string): boolean {
     return /[\u3000-\u303F\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(text);
 }
 
+
 interface CheckoutButtonProps {
     handleCheckout: () => void;
     isLoading: boolean;
@@ -149,6 +150,8 @@ function OrderReviewPageContent() {
             type: "delivery",
         },
     ]);
+    const [isDisclosureOpen, setIsDisclosureOpen] = useState(false);
+    const [hasDownloaded, setHasDownloaded] = useState(false);
 
     // Memoize processed lyrics from lyricsData.
     const lyrics = useMemo(() => {
@@ -398,6 +401,159 @@ function OrderReviewPageContent() {
         }
     };
 
+    const generateDownloadContent = (): string => {
+        const content = [
+            `NICEVOIS SONG MODIFICATION PROGRESS`,
+            `Generated on: ${new Date().toLocaleString('en-GB', { timeZone: 'UTC' })} (GMT+0)`,
+            ``,
+            `SONG INFORMATION:`,
+            `Title: ${songTitle || 'N/A'}`,
+            `Artist: ${songArtist || 'N/A'}`,
+            `URL: ${songUrl || 'N/A'}`,
+            ``,
+            `LYRICS CHANGES (${distinctChangedWords.length} words modified):`,
+            `Changed Words: ${distinctChangedWords.join(', ')}`,
+            ``,
+            `MODIFIED LYRICS:`,
+            ...lyrics
+                .filter(line => line.modified !== line.original)
+                .map(line => `Line ${line.id}: "${line.original}" → "${line.modified}"`),
+            ``,
+            `SPECIAL REQUESTS:`,
+            specialRequests || 'None',
+            ``,
+            `DELIVERY PREFERENCE:`,
+            productOptions.find(p => p.isSelected && p.type === 'delivery')?.title || 'Standard',
+            ``,
+            `TOTAL COST: US$${calculateTotal().toFixed(2)}`,
+            ``,
+            `To continue with your order, load this file on "https://nicevois.com/products/change-song-lyrics" and select the "Load last checkout" tab.`
+        ];
+
+        return content.join('\n');
+    };
+
+    const handleDownload = () => {
+        const content = generateDownloadContent();
+        const filename = `nicevois_${(songTitle || 'song').replace(/[^a-zA-Z0-9]/g, '_')}_${(songArtist || 'artist').replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setHasDownloaded(true);
+        // toast.success("Checkout progress file downloaded successfully!", {
+        //     description: "You can now request a sample or save this file for later use."
+        // });
+    };
+
+    const handleSampleRequest = async () => {
+        if (!hasDownloaded) {
+            toast.error("Download required", {
+                description: "Please download the checkout progress file first before requesting a sample."
+            });
+            return;
+        }
+
+        setIsLoading(true);
+
+        // Same validation as handleCheckout
+        if (distinctChangedWords.length < 1) {
+            toast.error("No significant changes detected", {
+                description: "You must modify at least one word to proceed with sample request.",
+            });
+            setIsLoading(false);
+            return;
+        }
+
+        if (lyrics.filter(line => line.modified !== line.original).length === 0) {
+            toast.error("No lyrics changes detected", {
+                description: "You need to modify at least one line of lyrics to request a sample.",
+            });
+            setIsLoading(false);
+            return;
+        }
+
+        if (!songTitle && !songArtist && !songUrl) {
+            toast.error("Missing song information", {
+                description: "Please go back and select a song before requesting a sample.",
+            });
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            const sessionId = localStorage.getItem("sessionId") || Math.random().toString(36).substring(2, 15);
+            localStorage.setItem("sessionId", sessionId);
+
+            const lyricsChanges = lyrics
+                .filter(line => line.modified !== line.original)
+                .map(line => ({
+                    id: line.id,
+                    original: line.original,
+                    modified: line.modified,
+                }));
+
+            const sampleOrderData = {
+                sessionId,
+                price: 2.00, // Fixed price for sample
+                numWordChanged: distinctChangedWords.length,
+                wordChanged: distinctChangedWords,
+                songName: songTitle || undefined,
+                artist: songArtist || undefined,
+                songImage: songImage || undefined,
+                songUrl: songUrl || undefined,
+                lyrics: lyricsChanges,
+                specialRequests: specialRequests,
+                isSample: true
+            };
+
+            const response = await fetch("/api/shopify/request-sample", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(sampleOrderData),
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    try {
+                        if (window.top && window.top !== window) {
+                            window.top.location.href = result.data.invoiceUrl;
+                        } else {
+                            window.parent.location.href = result.data.invoiceUrl;
+                        }
+                    } catch {
+                        window.location.href = result.data.invoiceUrl;
+                    }
+                    return;
+                } else {
+                    const userMessage = result.userMessage || "Failed to create sample request";
+                    toast.error("Sample request error", { description: userMessage });
+                    throw new Error(userMessage);
+                }
+            } else {
+                const errorText = await response.text();
+                const errorMessage = `Error ${response.status}: ${response.statusText}`;
+                toast.error("Server error", { description: errorText || errorMessage });
+                throw new Error(errorMessage);
+            }
+        } catch (error) {
+            console.error("Sample request error:", error);
+            toast.error("Sample request failed", {
+                description: `There was a problem processing your sample request: ${error instanceof Error ? error.message : String(error)}`,
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
     const steps: StepProps[] = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },
@@ -635,6 +791,85 @@ function OrderReviewPageContent() {
 
                                                 </label>
                                             ))}
+                                    </div>
+
+                                    {/* Request Sample */}
+                                    <div className="border overflow-hidden rounded-sm bg-white/90" style={{ marginBottom: '1.25rem', marginTop: '0.75rem' }} >
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsDisclosureOpen(!isDisclosureOpen)}
+                                            className="w-full p-4 flex items-center justify-between text-left  transition-colors"
+                                        >
+                                            <span className="font-medium text-gray-500">Request Sample</span>
+                                            {isDisclosureOpen ? (
+                                                <ChevronUp className="size-5 text-gray-500" />
+                                            ) : (
+                                                <ChevronDown className="size-5 text-gray-500" />
+                                            )}
+                                        </button>
+
+                                        {isDisclosureOpen && (
+                                            <div className="p-4 border-t bg-gray-50">
+                                                <div className="space-y-6">
+                                                    <p className="text-gray-700 leading-relaxed">
+                                                        Not sure if the new lyric changes will meet your expectation? Request a 10–15 second sample audio preview for just US$2!
+                                                    </p>
+
+                                                    <div className="bg-yellow-50 border border-yellow-400 rounded-md p-4 leading-8">
+                                                        <p className=" text-gray-700 mb-2">
+                                                            <strong>Important Notes:</strong>
+                                                        </p>
+                                                        <ul className=" text-gray-700 space-y-1 list-disc list-inside">
+                                                            <li>We will email you a 10-15 second preview based on the segment that best showcase the final lyric changes, within 2 days.</li>
+                                                            <li>This US$2 fee is for the <span className="italic">Request Sample</span> service only and does <span className="text-red-600">not</span> apply toward your full song modification order.</li>
+                                                            <li><span className="italic">Request Sample</span>  is one-time purchase and is <span className="text-red-600">not</span> eligible for refund. Only a full song modification order is eligible for refund. For more details, please visit our <a href="https://nicevois.com/pages/refund-policy" className="text-blue-600 hover:text-blue-700 w-fit hover:underline inline-block" target="_blank" rel="noopener noreferrer" >
+                                                                Refund Policy page
+                                                                <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
+                                                            </a>.
+                                                            </li>
+                                                            <li>To learn how <span className="italic">Request Sample</span> works, please visit <a href="https://nicevois.com/pages/how-to-request-sample-audio" className="text-blue-600 hover:text-blue-700 w-fit hover:underline inline-block" target="_blank" rel="noopener noreferrer" >
+                                                                How to request sample audio
+                                                                <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
+                                                            </a>.
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        {!hasDownloaded && (
+                                                            <p className="text-center text-sm">Please <span className="italic">Download Checkout Progress</span>  file first before <span className="italic">Request Sample</span>.</p>
+                                                        )}
+                                                        <button
+                                                            onClick={handleDownload}
+                                                            className="w-full flex items-center justify-center gap-2 p-4 my-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors border border-gray-200"
+                                                        >
+                                                            <Download className="size-4" />
+                                                            Download Checkout Progress
+                                                            {hasDownloaded && <span className="text-green-600 text-xs">(Downloaded ✓)</span>}
+                                                        </button>
+
+                                                        <button
+                                                            onClick={handleSampleRequest}
+                                                            disabled={isLoading}
+                                                            className={`w-full flex items-center justify-center gap-2 p-4 my-2 rounded-md transition-colors bg-blue-600 text-white ${hasDownloaded
+                                                                ? ' hover:bg-blue-700'
+                                                                : 'opacity-30 cursor-not-allowed'
+                                                                }`}
+                                                        >
+                                                            {isLoading ? (
+                                                                "Processing..."
+                                                            ) : (
+                                                                <>
+                                                                    Request Sample US$2.00
+                                                                    <ChevronRight className="size-4" />
+                                                                </>
+                                                            )}
+                                                        </button>
+
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
