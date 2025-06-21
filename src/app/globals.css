@@ -3185,3 +3185,42 @@ img,video {
 .\[\&_tr\]\:border-b tr {
     border-bottom-width: 1px
 }
+
+.tab-container {
+    display: flex;
+    width: 100%;
+    border: 1px solid hsl(var(--primary) / 0.1);
+    border-radius: 8px;
+    /* overflow: hidden; */
+}
+
+.tab-trigger {
+    flex: 1;
+    border: none;
+    border-right: 1px solid hsl(var(--primary) / 0.1);
+    transition: all 0.2s ease;
+}
+
+.tab-trigger:first-child {
+    @apply rounded-l-md;
+}
+
+.tab-trigger:last-child {
+    border-right: none;
+    @apply rounded-r-md;
+}
+
+.tab-trigger[data-state="active"] {
+    background-color: hsl(var(--primary));
+    @apply shadow-sm rounded-md;
+    color: white;
+}
+
+.tab-trigger:not([data-state="active"]) {
+    background-color: hsl(var(--primary) / 0.1);
+    color: white;
+}
+
+.tab-trigger:not([data-state="active"]):hover {
+    background-color: hsl(var(--primary) / 0.15);
+}

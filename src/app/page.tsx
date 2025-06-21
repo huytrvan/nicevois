@@ -1,8 +1,9 @@
+// src\app\page.tsx
 "use client";
 
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { Search, Clock, X, Link, ChevronRight } from 'lucide-react';
+import { Search, X, Link, ChevronRight, Upload, FileText, ShoppingCart, TextSelect } from 'lucide-react';
 import React from "react";
 import { useRouter } from 'next/navigation';
 import * as Tabs from '@radix-ui/react-tabs';
@@ -15,6 +16,26 @@ import { StepIndicator, StepDivider, StepProps } from '@/components/layouts/Step
 type ManualEntryFields = {
     songUrl: string;
     lyrics: string;
+}
+
+
+export type CheckoutData = {
+    title: string;
+    artist: string;
+    image?: string;
+    url: string;
+    changedWords: string[];
+    modifiedLyrics: string;
+    originalLyrics?: string;
+    lineChanges?: Array<{
+        lineNumber: number;
+        original: string;
+        modified: string;
+    }>; // Add line changes for accurate reconstruction
+    specialRequests: string;
+    deliveryPreference: string;
+    totalCost: string;
+    generatedOn: string;
 }
 
 interface Song {
@@ -31,6 +52,7 @@ interface SearchResultsProps {
     onSelect: (song: Song) => void;
 }
 
+
 const InfoCard = () => (
     <div className="relative w-full rounded-lg p-4 bg-primary/80 text-white/80 text-sm md:text-base dark:border-gray-100/5" role="alert">
         <div className="flex flex-col gap-2">
@@ -42,10 +64,16 @@ const InfoCard = () => (
                         <strong>Quick Search:</strong> Search Genius database to automatically find and import lyrics
                     </span>
                 </span>
-                <span className="flex flex-row items-start gap-2">
-                    <Clock className="mt-1 size-4 md:size-5 flex-shrink-0" strokeWidth={2.15} />
+                <span className="my-1.5 flex flex-row items-start gap-2">
+                    <TextSelect className="mt-1 size-4 md:size-5 flex-shrink-0" strokeWidth={2.15} />
                     <span className="flex-1">
                         <strong>Manual Entry:</strong> Paste a song URL and add lyrics from any source
+                    </span>
+                </span>
+                <span className="flex flex-row items-start gap-2">
+                    <ShoppingCart className="mt-1 size-4 md:size-5 flex-shrink-0" strokeWidth={2.15} />
+                    <span className="flex-1">
+                        <strong>Load Checkout:</strong> Upload a previous checkout file
                     </span>
                 </span>
             </p>
@@ -449,6 +477,252 @@ const ManualEntryPanel = () => {
     );
 };
 
+const LoadCheckoutPanel = () => {
+    const router = useRouter();
+    const [isButtonLoading, setIsButtonLoading] = useState(false);
+    const [, setUploadedFile] = useState<File | null>(null);
+    const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
+    const [parseError, setParseError] = useState<string>('');
+
+    const parseCheckoutFile = (content: string): CheckoutData | null => {
+        try {
+            const titleMatch = content.match(/Title:\s*(.+)/);
+            const artistMatch = content.match(/Artist:\s*(.+)/);
+            const imageMatch = content.match(/Image URL:\s*(.+)/);
+            const urlMatch = content.match(/URL:\s*(.+)/); // Broaden to accept any URL
+            const changedWordsMatch = content.match(/Changed Words:\s*(.+)/);
+            const specialRequestsMatch = content.match(/SPECIAL REQUESTS:\s*([\s\S]*?)(?=\n\nTo continue|$)/);
+
+            const lineChangesMatch = content.match(/LINE-BY-LINE CHANGES:\s*([\s\S]*?)(?=\n\nORIGINAL LYRICS:|$)/);
+            let lineChanges: Array<{ lineNumber: number, original: string, modified: string }> = [];
+            if (lineChangesMatch) {
+                const changesText = lineChangesMatch[1].trim();
+                const changeLines = changesText.split('\n').filter(line => line.trim());
+                lineChanges = changeLines.map(line => {
+                    const match = line.match(/Line (\d+):\s*"([^"]*?)"\s*->\s*"([^"]*?)"/);
+                    if (match) {
+                        return {
+                            lineNumber: parseInt(match[1]) - 1,
+                            original: match[2],
+                            modified: match[3]
+                        };
+                    }
+                    return null;
+                }).filter(Boolean) as Array<{ lineNumber: number, original: string, modified: string }>;
+            }
+
+            const modifiedLyricsStart = content.indexOf('MODIFIED LYRICS:');
+            const specialRequestsStart = content.indexOf('SPECIAL REQUESTS:');
+            let modifiedLyrics = '';
+            if (modifiedLyricsStart !== -1 && specialRequestsStart !== -1) {
+                modifiedLyrics = content.substring(modifiedLyricsStart + 17, specialRequestsStart).trim();
+            }
+
+            const originalLyricsStart = content.indexOf('ORIGINAL LYRICS:');
+            const modifiedLyricsMarker = content.indexOf('MODIFIED LYRICS:');
+            let originalLyrics = '';
+            if (originalLyricsStart !== -1 && modifiedLyricsMarker !== -1) {
+                originalLyrics = content.substring(originalLyricsStart + 16, modifiedLyricsMarker).trim();
+            }
+
+            const result: CheckoutData = {
+                title: titleMatch?.[1]?.trim() || '',
+                artist: artistMatch?.[1]?.trim() || '',
+                url: urlMatch?.[1]?.trim() || '',
+                image: imageMatch?.[1]?.trim() || '',
+                changedWords: changedWordsMatch?.[1]?.split(',').map(w => w.trim()) || [],
+                modifiedLyrics,
+                originalLyrics,
+                lineChanges,
+                specialRequests: specialRequestsMatch?.[1]?.trim() || 'None',
+                deliveryPreference: '',
+                totalCost: '',
+                generatedOn: ''
+            };
+
+            return result;
+        } catch (error) {
+            console.error('Error parsing checkout file:', error);
+            return null;
+        }
+    };
+
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setUploadedFile(file);
+        setParseError('');
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const content = e.target?.result as string;
+            const parsed = parseCheckoutFile(content);
+
+            if (parsed && parsed.title && parsed.artist) {
+                setCheckoutData(parsed);
+                console.log('Parsed checkout data:', parsed); // Debug log
+            } else {
+                setParseError('Invalid checkout file format. Please upload a valid checkout progress file.');
+                setCheckoutData(null);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleLoadCheckout = () => {
+        if (!checkoutData) {
+            toast.error('Invalid file', {
+                description: 'Please upload a valid checkout file first',
+            });
+            return;
+        }
+
+        setIsButtonLoading(true);
+
+        try {
+            // Store checkout data in localStorage for the change-lyrics page to use
+            localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+
+            // Store the modified lyrics separately for easier access
+            if (checkoutData.modifiedLyrics) {
+                localStorage.setItem('modifiedLyrics', checkoutData.modifiedLyrics);
+            }
+
+            // Store original lyrics if available
+            if (checkoutData.originalLyrics) {
+                localStorage.setItem('originalLyrics', checkoutData.originalLyrics);
+            }
+
+            // Navigate similar to quick search with URL parameters
+            const params = new URLSearchParams({
+                title: checkoutData.title,
+                artist: checkoutData.artist,
+                url: checkoutData.url,
+                loadCheckout: 'true'
+            });
+
+            // Add image parameter if available
+            if (checkoutData.image && checkoutData.image !== 'N/A') {
+                params.set('image', checkoutData.image);
+            }
+
+            setTimeout(() => {
+                router.push(`/change-lyrics?${params.toString()}`);
+            }, 50);
+        } catch (error) {
+            console.error('Error loading checkout:', error);
+            toast.error('Error loading checkout', {
+                description: 'Failed to process checkout file. Please try again.',
+            });
+            setIsButtonLoading(false);
+        }
+    };
+
+    return (
+        <div className="py-6 mt-4 flex flex-1 flex-col gap-4">
+            <p className="text-sm md:text-base text-white font-roboto font-normal tracking-wide">
+                Upload your previous checkout file to continue where you left off.
+            </p>
+
+            <div className="flex flex-col gap-4">
+                <label htmlFor="checkout-file" className="cursor-pointer">
+                    <div className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <Upload className="w-8 h-8 mb-2 text-gray-500" />
+                            <p className="mb-2 text-sm text-gray-500">
+                                <span className="font-semibold">Click to upload</span> your checkout file
+                            </p>
+                            <p className="text-xs text-gray-500">TXT files only</p>
+                        </div>
+                    </div>
+                    <input
+                        id="checkout-file"
+                        type="file"
+                        accept=".txt"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                    />
+                </label>
+
+                {parseError && (
+                    <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                        {parseError}
+                    </div>
+                )}
+
+                {checkoutData && (
+                    <div className="p-4 bg-primary/10 rounded-lg">
+                        <h3 className="text-lg text-white font-azbuka tracking-normal mb-2">
+                            Checkout Preview
+                        </h3>
+
+                        <div className="flex gap-3 items-start">
+                            {/* Image section */}
+                            {checkoutData.image && checkoutData.image !== 'N/A' ? (
+                                <div className="relative w-20 h-20 md:w-24 md:h-24 flex-shrink-0">
+                                    <Image
+                                        src={checkoutData.image}
+                                        alt={checkoutData.title}
+                                        fill
+                                        className="rounded-md object-cover"
+                                        onError={(e) => {
+                                            // Hide image on error
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-300 rounded-md flex items-center justify-center flex-shrink-0">
+                                    <FileText className="w-8 h-8 text-gray-500" />
+                                </div>
+                            )}
+
+                            {/* Song details */}
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-base text-white font-azbuka tracking-normal truncate">
+                                    {checkoutData.title}
+                                </h4>
+                                <p className="text-sm text-white/80 font-roboto tracking-wide truncate">
+                                    by {checkoutData.artist}
+                                </p>
+                                <p className="text-xs text-white/60 font-roboto mt-1">
+                                    {checkoutData.changedWords.length} words modified
+                                </p>
+                                {checkoutData.generatedOn && (
+                                    <p className="text-xs text-white/60 font-roboto">
+                                        Generated: {checkoutData.generatedOn}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {checkoutData && (
+                <div className="flex flex-row py-4">
+                    <button
+                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal 
+                            transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none 
+                            disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none 
+                            [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground 
+                            hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 
+                            active:bg-primary/75 active:ring-0 h-10 px-5 rounded-md ml-auto text-sm md:text-base"
+                        type="button"
+                        disabled={isButtonLoading}
+                        onClick={handleLoadCheckout}
+                    >
+                        {isButtonLoading ? "Loading..." : "Next"}
+                        {!isButtonLoading && <ChevronRight className="-mr-1" />}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // Main component
 export default function LyricChangerPage() {
     useEffect(() => {
@@ -519,35 +793,38 @@ export default function LyricChangerPage() {
                         {/* Tabs */}
                         <div className="flex-1">
                             <Tabs.Root defaultValue="search" className="flex flex-col flex-1">
-                                <Tabs.List className="h-12 my-2 -mb-3 grid w-full grid-cols-2 gap-2 rounded-full p-0
-                                    items-center justify-center text-muted-foreground bg-transparent
-                                    dark:bg-foundation-secondary">
-                                    <Tabs.Trigger
-                                        value="search"
-                                        className="inline-flex h-11 items-center justify-center rounded-full px-3 py-1.5 
-                                            font-medium ring-offset-foundation transition-all focus-visible:outline-none 
-                                            focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none 
-                                            disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:font-semibold 
-                                            data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-muted 
-                                            bg-primary/10 text-xs md:text-sm text-white hover:bg-primary/15 hover:ring 
-                                            hover:ring-secondary/20 data-[state=active]:hover:ring-primary/50 whitespace-nowrap"
-                                    >
-                                        <Search className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />
-                                        Quick Search
-                                    </Tabs.Trigger>
-                                    <Tabs.Trigger
-                                        value="manual"
-                                        className="inline-flex h-11 items-center justify-center rounded-full px-3 py-1.5 
-                                            font-medium ring-offset-foundation transition-all focus-visible:outline-none 
-                                            focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none 
-                                            disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:font-semibold 
-                                            data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-muted 
-                                            bg-primary/10 text-xs md:text-sm text-white hover:bg-primary/15 hover:ring 
-                                            hover:ring-secondary/20 data-[state=active]:hover:ring-primary/50 whitespace-nowrap"
-                                    >
-                                        <Clock className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />
-                                        Manual Entry
-                                    </Tabs.Trigger>
+                                <Tabs.List className="h-12 my-2 -mb-3 flex w-full items-center justify-center text-muted-foreground bg-transparent">
+                                    <div className="tab-container">
+                                        <Tabs.Trigger
+                                            value="search"
+                                            className="tab-trigger inline-flex h-11 items-center justify-center px-3 py-1.5 
+            font-medium focus-visible:outline-none disabled:pointer-events-none 
+            disabled:opacity-50 text-xs md:text-sm whitespace-nowrap"
+                                        >
+                                            <Search className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />
+                                            Quick Search
+                                        </Tabs.Trigger>
+
+                                        <Tabs.Trigger
+                                            value="manual"
+                                            className="tab-trigger inline-flex h-11 items-center justify-center px-3 py-1.5 
+            font-medium focus-visible:outline-none disabled:pointer-events-none 
+            disabled:opacity-50 text-xs md:text-sm whitespace-nowrap"
+                                        >
+                                            <TextSelect className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />
+                                            Manual Entry
+                                        </Tabs.Trigger>
+
+                                        <Tabs.Trigger
+                                            value="checkout"
+                                            className="tab-trigger inline-flex h-11 items-center justify-center px-3 py-1.5 
+            font-medium focus-visible:outline-none disabled:pointer-events-none 
+            disabled:opacity-50 text-xs md:text-sm whitespace-nowrap"
+                                        >
+                                            <ShoppingCart className="mr-1.5 size-4 max-[380px]:hidden md:size-5 flex-shrink-0" />
+                                            Load Checkout
+                                        </Tabs.Trigger>
+                                    </div>
                                 </Tabs.List>
 
                                 <Tabs.Content
@@ -562,6 +839,13 @@ export default function LyricChangerPage() {
                                     className="ring-offset-foundation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 data-[state=inactive]:hidden"
                                 >
                                     <ManualEntryPanel />
+                                </Tabs.Content>
+
+                                <Tabs.Content
+                                    value="checkout"
+                                    className="ring-offset-foundation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 data-[state=inactive]:hidden"
+                                >
+                                    <LoadCheckoutPanel />
                                 </Tabs.Content>
                             </Tabs.Root>
                         </div>

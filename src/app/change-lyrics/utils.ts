@@ -11,13 +11,27 @@
 import { diffWords, diffChars } from 'diff';
 import { toast as sonnerToast } from 'sonner'; // Import toast type from sonner
 
+export type CheckoutData = {
+    title: string;
+    artist: string;
+    image?: string; // Add image field
+    url: string;
+    changedWords: string[];
+    modifiedLyrics: string;
+    originalLyrics?: string; // Add original lyrics field
+    specialRequests: string;
+    deliveryPreference: string;
+    totalCost: string;
+    generatedOn: string;
+}
+
 export interface FormValues {
     songUrl: string;
     lyrics: string;
 }
 
 // Add this at the beginning of the file or wherever the interface is defined
-interface WordChange {
+export interface WordChange {
     originalWord: string;
     newWord: string;
     originalIndex: number;
@@ -853,4 +867,68 @@ export const handleResetLine = (
         setFormValues(prev => ({ ...prev, lyrics: entireLyricsText }));
         return updatedLyrics;
     });
+};
+
+export const reconstructLyricsFromCheckout = (originalLyricsText: string, checkoutData: CheckoutData): LyricLine[] => {
+    const originalLines = originalLyricsText.split('\n').map(line => line.trim());
+    const modifiedLyricsText = checkoutData.modifiedLyrics;
+    const modifiedLines = modifiedLyricsText.split('\n').map(line => line.trim());
+
+    const reconstructedLyrics: LyricLine[] = [];
+    const maxLines = Math.max(originalLines.length, modifiedLines.length);
+
+    for (let i = 0; i < maxLines; i++) {
+        const originalLine = originalLines[i] || '';
+        const modifiedLine = modifiedLines[i] || '';
+
+        const diff = diffWords(originalLine, modifiedLine);
+        const wordChanges: WordChange[] = [];
+        let originalIndex = 0;
+        let newIndex = 0;
+
+        diff.forEach(part => {
+            const words = part.value.split(/\s+/).filter(w => w.length > 0);
+            words.forEach(word => {
+                if (part.added) {
+                    wordChanges.push({
+                        originalWord: '',
+                        newWord: word,
+                        originalIndex: originalIndex,
+                        newIndex: newIndex,
+                        hasChanged: true,
+                        isAddition: true,
+                        isSubstitution: false,
+                        isDeletion: false
+                    });
+                    newIndex++;
+                } else if (part.removed) {
+                    wordChanges.push({
+                        originalWord: word,
+                        newWord: '',
+                        originalIndex: originalIndex,
+                        newIndex: newIndex,
+                        hasChanged: true,
+                        isDeletion: true,
+                        isAddition: false,
+                        isSubstitution: false
+                    });
+                    originalIndex++;
+                } else {
+                    // Unchanged word
+                    originalIndex++;
+                    newIndex++;
+                }
+            });
+        });
+
+        reconstructedLyrics.push({
+            id: i + 1,
+            original: originalLine,
+            modified: modifiedLine,
+            wordChanges: wordChanges
+        });
+    }
+
+    console.log('Reconstructed Lyrics:', reconstructedLyrics); // Debug log
+    return reconstructedLyrics;
 };

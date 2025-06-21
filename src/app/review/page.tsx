@@ -402,6 +402,24 @@ function OrderReviewPageContent() {
     };
 
     const generateDownloadContent = (): string => {
+        // Generate original lyrics text for reference
+        const originalLyricsText = lyricsData.map(line => line.original).join('\n');
+
+        // Generate modified lyrics text
+        const modifiedLyricsText = lyricsData.map(line => line.modified).join('\n');
+
+        // Generate line-by-line changes with line numbers based on full lyricsData
+        const lineChanges = lyricsData
+            .map((line, index) => {
+                // Include the line if it has been modified
+                if (line.original !== line.modified) {
+                    return `Line ${index + 1}: "${line.original}" -> "${line.modified}"`;
+                }
+                return null;
+            })
+            .filter(Boolean)
+            .join('\n');
+
         const content = [
             `NICEVOIS SONG MODIFICATION PROGRESS`,
             `Generated on: ${new Date().toLocaleString('en-GB', { timeZone: 'UTC' })} (GMT+0)`,
@@ -409,33 +427,50 @@ function OrderReviewPageContent() {
             `SONG INFORMATION:`,
             `Title: ${songTitle || 'N/A'}`,
             `Artist: ${songArtist || 'N/A'}`,
+            `Image URL: ${songImage || 'N/A'}`,
             `URL: ${songUrl || 'N/A'}`,
             ``,
             `LYRICS CHANGES (${distinctChangedWords.length} words modified):`,
             `Changed Words: ${distinctChangedWords.join(', ')}`,
             ``,
+            `LINE-BY-LINE CHANGES:`,
+            lineChanges || 'No changes detected', // Fallback if no changes
+            ``,
+            `ORIGINAL LYRICS:`,
+            originalLyricsText,
+            ``,
             `MODIFIED LYRICS:`,
-            ...lyrics
-                .filter(line => line.modified !== line.original)
-                .map(line => `Line ${line.id}: "${line.original}" → "${line.modified}"`),
+            modifiedLyricsText,
             ``,
             `SPECIAL REQUESTS:`,
             specialRequests || 'None',
             ``,
-            `DELIVERY PREFERENCE:`,
-            productOptions.find(p => p.isSelected && p.type === 'delivery')?.title || 'Standard',
-            ``,
-            `TOTAL COST: US$${calculateTotal().toFixed(2)}`,
-            ``,
-            `To continue with your order, load this file on "https://nicevois.com/products/change-song-lyrics" and select the "Load last checkout" tab.`
+            `To continue with your order, load this file on "https://nicevois.com/products/change-song-lyrics" and select the "Load checkout" tab.`,
+            `Please keep this file safe, if lost, you will have to start the order process all over again!`
         ];
 
         return content.join('\n');
     };
 
+    function safeForFilename(
+        str: string | null | undefined,
+        fallback: string
+    ): string {
+        // Use lowercase `string` type, not `String` object type.
+        const candidate = str?.trim() ?? "";
+        const base = candidate.length > 0 ? candidate : fallback;
+        // Replace anything not A-Z, a-z, 0-9 with underscore.
+        return base.replace(/[^a-zA-Z0-9]/g, "_");
+    }
+
     const handleDownload = () => {
         const content = generateDownloadContent();
-        const filename = `nicevois_${(songTitle || 'song').replace(/[^a-zA-Z0-9]/g, '_')}_${(songArtist || 'artist').replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+        const timestampUTC = new Date()
+            .toISOString()
+            .slice(0, 19)
+            .replace(/:/g, '-');
+
+        const filename = `nicevois_${safeForFilename(songTitle, 'song')}_${safeForFilename(songArtist, 'artist')}_${timestampUTC}.txt`;
 
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -845,7 +880,7 @@ function OrderReviewPageContent() {
                                                         >
                                                             <Download className="size-4" />
                                                             Download Checkout Progress (.txt)
-                                                            {hasDownloaded && <span className="text-green-600 text-xs">(Downloaded ✓)</span>}
+                                                            {hasDownloaded && <span className="text-green-600 text-sm">(Downloaded ✓)</span>}
                                                         </button>
 
                                                         <button
