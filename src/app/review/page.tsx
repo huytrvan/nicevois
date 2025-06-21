@@ -837,14 +837,14 @@ function OrderReviewPageContent() {
 
                                                     <div className="space-y-3">
                                                         {!hasDownloaded && (
-                                                            <p className="text-center text-sm">Please <span className="italic">Download Checkout Progress</span>  file first before <span className="italic">Request Sample</span>.</p>
+                                                            <p className="text-center text-sm">Please <span className="italic">Download Checkout Progress (.txt)</span>  file first before <span className="italic">Request Sample</span>.</p>
                                                         )}
                                                         <button
                                                             onClick={handleDownload}
                                                             className="w-full flex items-center justify-center gap-2 p-4 my-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors border border-gray-200"
                                                         >
                                                             <Download className="size-4" />
-                                                            Download Checkout Progress
+                                                            Download Checkout Progress (.txt)
                                                             {hasDownloaded && <span className="text-green-600 text-xs">(Downloaded ✓)</span>}
                                                         </button>
 
