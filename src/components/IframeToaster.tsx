@@ -1,59 +1,23 @@
 // components/IframeToaster.tsx
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Toaster } from 'sonner';
 
 export default function IframeToaster() {
+    const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
     useEffect(() => {
-        // Function to reposition the toaster container
-        function repositionToaster() {
-            const toaster = document.querySelector('[data-sonner-toaster]');
-            if (toaster) {
-                if (window.top && window.top !== window.self) {
-                    // If inside an iframe, attempt to move the toast container to the parent's body so fixed positioning follows the viewport
-                    try {
-                        window.top.document.body.appendChild(toaster);
-                    } catch (error) {
-                        console.error("Unable to append toaster to parent document:", error);
-                    }
-                }
-                (toaster as HTMLElement).style.position = 'fixed';
-                (toaster as HTMLElement).style.top = '1rem';
-                (toaster as HTMLElement).style.left = '50%';
-                (toaster as HTMLElement).style.transform = 'translateX(-50%)';
-                (toaster as HTMLElement).style.zIndex = '999999';
+        if (typeof window !== 'undefined' && window.top && window.top !== window) {
+            try {
+                setPortalContainer(window.top.document.body);
+            } catch (error) {
+                console.error("Error accessing parent's body:", error);
             }
-        }
-        // Initial reposition on mount
-        repositionToaster();
-        // Repeat repositioning every 500ms for 3 seconds to catch late render adjustments
-        const intervalId = setInterval(repositionToaster, 500);
-        setTimeout(() => clearInterval(intervalId), 3000);
-
-        // Add MutationObserver to reposition when new toast elements are added
-        const toaster = document.querySelector('[data-sonner-toaster]');
-        let observer: MutationObserver | null = null;
-        if (toaster) {
-            observer = new MutationObserver(() => repositionToaster());
-            observer.observe(toaster, { childList: true });
-        }
-        // Add event listeners for window resize and parent's scroll to reposition toaster
-        window.addEventListener('resize', repositionToaster);
-        if (window.top && window.top !== window) {
-            window.top.addEventListener('scroll', repositionToaster);
-        }
-        return () => {
-            if (observer) observer.disconnect();
-            window.removeEventListener('resize', repositionToaster);
-            if (window.top && window.top !== window) {
-                window.top.removeEventListener('scroll', repositionToaster);
-            }
-            clearInterval(intervalId);
         }
     }, []);
-
-    return (
+    
+    const toaster = (
         <Toaster
             position="top-center"
             offset={16}
@@ -71,4 +35,9 @@ export default function IframeToaster() {
             }}
         />
     );
+    
+    if (portalContainer) {
+        return createPortal(toaster, portalContainer);
+    }
+    return toaster;
 }
