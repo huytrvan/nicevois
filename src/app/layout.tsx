@@ -24,6 +24,7 @@ export default function RootLayout({
                     {children}
                 </div>
                 <IframeHeightManager />
+                <div id="portal-toaster-container"></div>
             </body>
         </html>
     );

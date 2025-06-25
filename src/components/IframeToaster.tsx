@@ -8,26 +8,17 @@ import { Toaster } from 'sonner';
 export default function IframeToaster() {
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
     useEffect(() => {
-        if (typeof window !== 'undefined' && window.top && window.top !== window) {
+        if (typeof window !== 'undefined') {
             try {
-                const parentDoc = window.top.document;
-                let container = parentDoc.getElementById('portal-toaster-container');
-                let didCreate = false;
+                const container =
+                    (window.top && window.top !== window && window.top.document.getElementById('portal-toaster-container')) ||
+                    document.getElementById('portal-toaster-container');
                 if (!container) {
-                    container = parentDoc.createElement('div');
-                    container.id = 'portal-toaster-container';
-                    parentDoc.body.appendChild(container);
-                    didCreate = true;
+                    console.error("Portal container not found. Ensure that a div with id 'portal-toaster-container' exists in your layout.");
                 }
                 setPortalContainer(container);
-                return () => {
-                    // Remove the container if we created it
-                    if (didCreate && container && container.parentNode) {
-                        container.parentNode.removeChild(container);
-                    }
-                };
             } catch (error) {
-                console.error("Error accessing parent's document:", error);
+                console.error("Error accessing portal container:", error);
             }
         }
     }, []);
