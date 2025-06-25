@@ -34,8 +34,11 @@ export default function IframeToaster() {
             observer = new MutationObserver(() => repositionToaster());
             observer.observe(toaster, { childList: true });
         }
+        // Add event listener for window resize to reposition toaster
+        window.addEventListener('resize', repositionToaster);
         return () => {
             if (observer) observer.disconnect();
+            window.removeEventListener('resize', repositionToaster);
             clearInterval(intervalId);
         }
     }, []);
