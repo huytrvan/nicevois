@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Toaster } from 'sonner';
 
-export default function CustomToastContainer() {
+export default function ViewportToaster() {
     const [isInIframe, setIsInIframe] = useState(false);
 
     useEffect(() => {
@@ -20,11 +20,12 @@ export default function CustomToastContainer() {
         setIsInIframe(checkIframe());
     }, []);
 
-    // Add custom CSS for iframe behavior
     useEffect(() => {
         if (!isInIframe) return;
 
+        // Force the toaster to always appear at the top of the visible viewport
         const style = document.createElement('style');
+        style.id = 'iframe-toaster-fix';
         style.textContent = `
             [data-sonner-toaster] {
                 position: fixed !important;
@@ -34,34 +35,18 @@ export default function CustomToastContainer() {
                 z-index: 9999 !important;
             }
             
-            [data-sonner-toaster][data-y-position="top"] {
-                top: calc(16px + var(--viewport-scroll, 0px)) !important;
+            [data-sonner-toast] {
+                position: relative !important;
             }
         `;
+
         document.head.appendChild(style);
 
-        let rafId: number;
-
-        const updateScrollPosition = () => {
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            document.documentElement.style.setProperty('--viewport-scroll', `${scrollTop}px`);
-        };
-
-        const handleScroll = () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            rafId = requestAnimationFrame(updateScrollPosition);
-        };
-
-        // Initial update
-        updateScrollPosition();
-
-        window.addEventListener('scroll', handleScroll, { passive: true });
-
         return () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            window.removeEventListener('scroll', handleScroll);
-            document.head.removeChild(style);
-            document.documentElement.style.removeProperty('--viewport-scroll');
+            const existingStyle = document.getElementById('iframe-toaster-fix');
+            if (existingStyle) {
+                existingStyle.remove();
+            }
         };
     }, [isInIframe]);
 

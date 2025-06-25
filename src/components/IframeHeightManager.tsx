@@ -1,4 +1,4 @@
-// src/components/IframeHeightManager.tsx
+// src/components/IframeHeightManager.tsx (Enhanced version)
 "use client";
 import { useEffect, useRef, useCallback } from "react";
 
@@ -59,6 +59,17 @@ export default function IframeHeightManager() {
         );
     }, []);
 
+    // New function to notify toast about height changes
+    const notifyToastOfChanges = useCallback(() => {
+        // Send message to ViewportToaster about height changes
+        window.dispatchEvent(new CustomEvent('iframe-height-changed', {
+            detail: {
+                height: getDocumentHeight(),
+                timestamp: Date.now()
+            }
+        }));
+    }, [getDocumentHeight]);
+
     const sendHeightToParent = useCallback((height: number, force = false) => {
         if (typeof window === "undefined") return;
 
@@ -84,6 +95,9 @@ export default function IframeHeightManager() {
             heightDiff: height - previousHeight,
         };
 
+        // Notify toast component
+        notifyToastOfChanges();
+
         // Send immediately for reductions, slight delay for expansions to allow settling
         const delay = isReduction ? 0 : 8;
 
@@ -97,7 +111,7 @@ export default function IframeHeightManager() {
                 }
             });
         }, delay);
-    }, []);
+    }, [notifyToastOfChanges]);
 
     const debouncedHeightUpdate = useCallback((force = false) => {
         if (!isEmbeddedInShopify()) return;
@@ -132,6 +146,37 @@ export default function IframeHeightManager() {
             debouncedHeightUpdate();
         }, MUTATION_DEBOUNCE_DELAY);
     }, [debouncedHeightUpdate]);
+
+    // Listen for parent scroll messages and relay to toast
+    useEffect(() => {
+        const handleParentMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'parent-scroll-info' || event.data?.type === 'parent-resize-info') {
+                // Relay to toast component
+                window.dispatchEvent(new CustomEvent('parent-viewport-change', {
+                    detail: event.data
+                }));
+            }
+
+            // Handle requests for scroll updates
+            if (event.data?.type === 'request-scroll-updates' && event.data?.source === 'ViewportToaster') {
+                // Send current state
+                try {
+                    window.parent.postMessage({
+                        type: 'iframe-ready-for-scroll-updates',
+                        source: 'IframeHeightManager'
+                    }, '*');
+                } catch {
+                    // Handle cross-origin restrictions
+                }
+            }
+        };
+
+        window.addEventListener('message', handleParentMessage);
+
+        return () => {
+            window.removeEventListener('message', handleParentMessage);
+        };
+    }, []);
 
     useEffect(() => {
         if (typeof window === "undefined" || isInitializedRef.current || !isEmbeddedInShopify()) {
