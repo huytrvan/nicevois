@@ -9,6 +9,10 @@ export default function IframeToaster() {
         // Force recalculate position when component mounts
         const toaster = document.querySelector('[data-sonner-toaster]');
         if (toaster) {
+            if (window.top !== window.self) {
+                // If inside an iframe, move the toast container to the parent's body so fixed positioning follows the viewport
+                window.top.document.body.appendChild(toaster);
+            }
             (toaster as HTMLElement).style.position = 'fixed';
             (toaster as HTMLElement).style.top = '1rem';
             (toaster as HTMLElement).style.left = '50%';
