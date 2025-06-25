@@ -26,6 +26,18 @@ export default function IframeToaster() {
         // Repeat repositioning every 500ms for 3 seconds to catch late render adjustments
         const intervalId = setInterval(repositionToaster, 500);
         setTimeout(() => clearInterval(intervalId), 3000);
+
+        // Add MutationObserver to reposition when new toast elements are added
+        const toaster = document.querySelector('[data-sonner-toaster]');
+        let observer: MutationObserver | null = null;
+        if (toaster) {
+            observer = new MutationObserver(() => repositionToaster());
+            observer.observe(toaster, { childList: true });
+        }
+        return () => {
+            if (observer) observer.disconnect();
+            clearInterval(intervalId);
+        }
     }, []);
 
     return (
