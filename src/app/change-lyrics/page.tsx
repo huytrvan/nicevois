@@ -550,17 +550,21 @@ function ChangeLyricsPageContent() {
                 /> */}
                 <Toaster
                     position="top-center"
+                    offset="16px"
+                    visibleToasts={3}
+                    closeButton
+                    richColors
                     toastOptions={{
                         style: {
-                            position: "fixed",
-                            top: "1rem",
-                            zIndex: 9999,
                             padding: "16px",
                             color: "oklch(0.396 0.141 25.723)",
                             backgroundColor: "oklch(0.971 0.013 17.38)",
                             fontSize: "1.15rem"
                         },
                     }}
+                    // These props help with iframe positioning
+                    expand={true}
+                    gap={8}
                 />
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-2 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
                     {/* Header/Nav */}
