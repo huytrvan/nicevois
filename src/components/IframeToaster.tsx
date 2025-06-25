@@ -31,7 +31,7 @@ export default function IframeToaster() {
             }
         }
     }, []);
-    
+
     const toaster = (
         <Toaster
             position="top-center"
@@ -50,7 +50,7 @@ export default function IframeToaster() {
             }}
         />
     );
-    
+
     if (portalContainer) {
         return createPortal(toaster, portalContainer);
     }
