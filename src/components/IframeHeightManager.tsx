@@ -209,9 +209,14 @@ export default function IframeHeightManager() {
             setTimeout(() => debouncedHeightUpdate(true), 16);
         };
 
+        const handleScroll = () => {
+            debouncedHeightUpdate();
+        };
+
         window.addEventListener("resize", handleResize, { passive: true });
         window.addEventListener("load", handleLoad);
         document.addEventListener("DOMContentLoaded", handleDOMContentLoaded);
+        window.addEventListener("scroll", handleScroll, { passive: true });
 
         return () => {
             // Cleanup
@@ -231,6 +236,7 @@ export default function IframeHeightManager() {
 
             window.removeEventListener("resize", handleResize);
             window.removeEventListener("load", handleLoad);
+            window.removeEventListener("scroll", handleScroll);
             document.removeEventListener("DOMContentLoaded", handleDOMContentLoaded);
             isInitializedRef.current = false;
         };
