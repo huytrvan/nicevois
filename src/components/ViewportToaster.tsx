@@ -1,15 +1,12 @@
-// components/IframeToaster.tsx
+// src/components/ViewportToaster.tsx
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Toaster } from 'sonner';
 
 export default function ViewportToaster() {
-    const [scrollOffset, setScrollOffset] = useState(0);
-    const [parentScrollOffset, setParentScrollOffset] = useState(0);
     const [isInIframe, setIsInIframe] = useState(false);
-    const [viewportHeight, setViewportHeight] = useState(0);
-    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const toasterRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         // Check if we're in an iframe
@@ -23,117 +20,100 @@ export default function ViewportToaster() {
 
         const inIframe = checkIframe();
         setIsInIframe(inIframe);
-        setViewportHeight(window.innerHeight);
 
-        const updateScrollOffset = () => {
-            const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-            setScrollOffset(currentScroll);
-        };
+        if (!inIframe) return;
 
-        // Try to get parent scroll information if in iframe
-        const requestParentScrollInfo = () => {
-            if (inIframe) {
-                try {
-                    window.parent.postMessage({
-                        type: 'request-scroll-info',
-                        source: 'ViewportToaster'
-                    }, '*');
-                } catch {
-                    // Silently handle cross-origin restrictions
-                }
+        let rafId: number;
+
+        const updateToasterPosition = () => {
+            // Find the Sonner toast container
+            const toastContainer = document.querySelector('[data-sonner-toaster]') as HTMLElement;
+
+            if (toastContainer) {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const viewportHeight = window.innerHeight;
+
+                // Position the toaster relative to the current viewport
+                toastContainer.style.position = 'fixed';
+                toastContainer.style.top = '16px';
+                toastContainer.style.transform = `translateY(${Math.max(0, scrollTop)}px)`;
+                toastContainer.style.zIndex = '9999';
+
+                // Ensure it doesn't go beyond the viewport
+                const maxTranslateY = Math.max(0, Math.min(scrollTop, document.documentElement.scrollHeight - viewportHeight));
+                toastContainer.style.transform = `translateY(${maxTranslateY}px)`;
             }
         };
 
-        // Listen for parent scroll information
-        const handleMessage = (event: MessageEvent) => {
-            if (event.data?.type === 'parent-scroll-info') {
-                setParentScrollOffset(event.data.scrollTop || 0);
-            }
-        };
-
-        // Throttled scroll handler for better performance
         const handleScroll = () => {
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
-            }
-
-            scrollTimeoutRef.current = setTimeout(() => {
-                updateScrollOffset();
-                requestParentScrollInfo();
-            }, 16); // ~60fps
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(updateToasterPosition);
         };
 
         const handleResize = () => {
-            setViewportHeight(window.innerHeight);
-            updateScrollOffset();
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(updateToasterPosition);
         };
 
-        // Initial setup
-        updateScrollOffset();
-        requestParentScrollInfo();
+        // Initial position update after a short delay to ensure Sonner is mounted
+        const initialTimer = setTimeout(updateToasterPosition, 100);
 
-        // Add event listeners
+        // Set up observers
         window.addEventListener('scroll', handleScroll, { passive: true });
         window.addEventListener('resize', handleResize, { passive: true });
 
-        if (inIframe) {
-            window.addEventListener('message', handleMessage);
-        }
+        // Also observe DOM changes to catch when toasts are added/removed
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList') {
+                    const hasToastChanges = Array.from(mutation.addedNodes).some(
+                        node => node instanceof Element && (
+                            node.querySelector('[data-sonner-toast]') ||
+                            node.hasAttribute('data-sonner-toast')
+                        )
+                    );
+
+                    if (hasToastChanges) {
+                        setTimeout(updateToasterPosition, 10);
+                    }
+                }
+            });
+        });
+
+        // Start observing after a delay to ensure Sonner is ready
+        setTimeout(() => {
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }, 200);
 
         return () => {
+            clearTimeout(initialTimer);
+            if (rafId) cancelAnimationFrame(rafId);
             window.removeEventListener('scroll', handleScroll);
             window.removeEventListener('resize', handleResize);
-            if (inIframe) {
-                window.removeEventListener('message', handleMessage);
-            }
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
-            }
+            observer.disconnect();
         };
-    }, []);
-
-    // Calculate the dynamic top position based on various factors
-    const calculateTopOffset = useCallback(() => {
-        if (!isInIframe) return 16;
-
-        // Base offset for iframe
-        let offset = 16;
-
-        // Add current scroll position to keep toast in viewport
-        offset += scrollOffset;
-
-        // If we have parent scroll info, factor that in too
-        if (parentScrollOffset > 0) {
-            offset += Math.min(parentScrollOffset, 50); // Cap parent scroll influence
-        }
-
-        // Ensure minimum offset and don't go too high
-        return Math.max(16, Math.min(offset, scrollOffset + viewportHeight - 100));
-    }, [isInIframe, scrollOffset, parentScrollOffset, viewportHeight]);
-
-    const dynamicTopOffset = calculateTopOffset();
+    }, [isInIframe]);
 
     return (
-        <Toaster
-            position="top-center"
-            offset={dynamicTopOffset}
-            expand={true}
-            richColors
-            closeButton
-            toastOptions={{
-                style: {
-                    padding: "16px",
-                    color: "oklch(0.396 0.141 25.723)",
-                    backgroundColor: "oklch(0.971 0.013 17.38)",
-                    fontSize: "1.15rem",
-                    zIndex: 9999,
-                    // Add some visual enhancement for iframe context
-                    boxShadow: isInIframe
-                        ? "0 10px 40px -10px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05)"
-                        : undefined,
-                },
-                duration: 4000,
-            }}
-        />
+        <div ref={toasterRef}>
+            <Toaster
+                position="top-center"
+                expand={true}
+                richColors
+                closeButton
+                toastOptions={{
+                    style: {
+                        padding: "16px",
+                        color: "oklch(0.396 0.141 25.723)",
+                        backgroundColor: "oklch(0.971 0.013 17.38)",
+                        fontSize: "1.15rem",
+                    },
+                    duration: 4000,
+                }}
+            />
+        </div>
     );
 }
