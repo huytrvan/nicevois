@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import IframeHeightManager from "../components/IframeHeightManager";
+import ViewportToaster from "../components/ViewportToaster";
 
 export const metadata: Metadata = {
     title: "Create Next App",
@@ -24,7 +25,7 @@ export default function RootLayout({
                     {children}
                 </div>
                 <IframeHeightManager />
-                <div id="portal-toaster-container"></div>
+                <ViewportToaster />
             </body>
         </html>
     );

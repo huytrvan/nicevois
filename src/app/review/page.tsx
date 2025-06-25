@@ -7,7 +7,7 @@ import { Check, ChevronRight, PackageCheck, ShoppingCart, ChevronDown, ChevronUp
 import React from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Separator from "@radix-ui/react-separator";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
 import { StepIndicator, StepDivider, type StepProps } from "@/components/layouts/StepNavigation";
 import BackButton from "@/components/BackButton";
 import Image from "next/image";
@@ -512,18 +512,6 @@ function OrderReviewPageContent() {
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
-                <Toaster
-                    position="top-center"
-                    toastOptions={{
-                        style: {
-                            marginTop: "7rem",
-                            padding: "16px",
-                            color: "oklch(0.396 0.141 25.723)",
-                            backgroundColor: "oklch(0.971 0.013 17.38)",
-                            fontSize: "1.15rem",
-                        },
-                    }}
-                />
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-4 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
                     <nav className="w-full bg-transparent px-4 pb-4">
                         {/* <div className="container mx-auto flex justify-end"> */}

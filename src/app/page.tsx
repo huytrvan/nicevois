@@ -8,7 +8,7 @@ import React from "react";
 import { useRouter } from 'next/navigation';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
 // import SignInToSaveButton from "@/components/SignInToSaveButton";
 import { StepIndicator, StepDivider, StepProps } from '@/components/layouts/StepNavigation';
 
@@ -756,19 +756,6 @@ export default function LyricChangerPage() {
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
-                <Toaster
-                    position="top-center"
-                    toastOptions={{
-                        style: {
-                            marginTop: "7rem",
-                            padding: "16px",
-                            color: "oklch(0.396 0.141 25.723)",
-                            backgroundColor: "oklch(0.971 0.013 17.38)",
-                            fontSize: "1.15rem"
-                        },
-                    }}
-                />
-
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-4 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
                     {/* Header/Nav */}
                     <nav className="w-full bg-transparent px-4 pb-4">
