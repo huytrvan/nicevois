@@ -10,9 +10,24 @@ export default function IframeToaster() {
     useEffect(() => {
         if (typeof window !== 'undefined' && window.top && window.top !== window) {
             try {
-                setPortalContainer(window.top.document.body);
+                const parentDoc = window.top.document;
+                let container = parentDoc.getElementById('portal-toaster-container');
+                let didCreate = false;
+                if (!container) {
+                    container = parentDoc.createElement('div');
+                    container.id = 'portal-toaster-container';
+                    parentDoc.body.appendChild(container);
+                    didCreate = true;
+                }
+                setPortalContainer(container);
+                return () => {
+                    // Remove the container if we created it
+                    if (didCreate && container && container.parentNode) {
+                        container.parentNode.removeChild(container);
+                    }
+                };
             } catch (error) {
-                console.error("Error accessing parent's body:", error);
+                console.error("Error accessing parent's document:", error);
             }
         }
     }, []);
