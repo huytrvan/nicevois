@@ -322,6 +322,22 @@ function OrderReviewPageContent() {
             .join('\n');
 
         const content = [
+            `/*******************************************************************`,
+            ` *                                                                 *`,
+            ` *  WARNING:  This file is auto-generated, do not edit it because  *`,
+            ` *  that would make the file unusable and you may have to start    *`,
+            ` *  the order process all over again.                              *`,
+            ` *                                                                 *`,
+            ` *******************************************************************/`,
+            ``,
+            `/*******************************************************************`,
+            ` *                                                                 *`,
+            ` *  USAGE: To continue with your order, go to                      *`,
+            ` *  "https://nicevois.com/products/change-song-lyrics" and select  *`,
+            ` *  the "Load Checkout" tab.                                       *`,
+            ` *                                                                 *`,
+            ` *******************************************************************/`,
+            ``,
             `NICEVOIS SONG MODIFICATION PROGRESS`,
             `Generated on: ${new Date().toLocaleString('en-GB', { timeZone: 'UTC' })} (GMT+0)`,
             ``,
@@ -346,8 +362,6 @@ function OrderReviewPageContent() {
             `SPECIAL REQUESTS:`,
             specialRequests || 'None',
             ``,
-            `To continue with your order, load this file on "https://nicevois.com/products/change-song-lyrics" and select the "Load checkout" tab.`,
-            `Please keep this file safe, if lost, you will have to start the order process all over again!`
         ];
 
         return content.join('\n');
