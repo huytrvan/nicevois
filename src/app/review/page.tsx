@@ -512,7 +512,7 @@ function OrderReviewPageContent() {
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
-                <Toaster
+                {/* <Toaster
                     position="top-center"
                     toastOptions={{
                         style: {
@@ -521,6 +521,20 @@ function OrderReviewPageContent() {
                             color: "oklch(0.396 0.141 25.723)",
                             backgroundColor: "oklch(0.971 0.013 17.38)",
                             fontSize: "1.15rem",
+                        },
+                    }}
+                /> */}
+                <Toaster
+                    position="top-center"
+                    toastOptions={{
+                        style: {
+                            position: "fixed",
+                            top: "1rem",
+                            zIndex: 9999,
+                            padding: "16px",
+                            color: "oklch(0.396 0.141 25.723)",
+                            backgroundColor: "oklch(0.971 0.013 17.38)",
+                            fontSize: "1.15rem"
                         },
                     }}
                 />
