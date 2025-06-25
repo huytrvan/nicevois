@@ -26,7 +26,7 @@ export type CheckoutData = {
     url: string;
     changedWords: string[];
     modifiedLyrics: string;
-    originalLyrics?: string;
+    originalLyrics: string;
     lineChanges?: Array<{
         lineNumber: number;
         original: string;
@@ -477,6 +477,7 @@ const ManualEntryPanel = () => {
     );
 };
 
+// A snippet from src/app/page.tsx
 const LoadCheckoutPanel = () => {
     const router = useRouter();
     const [isButtonLoading, setIsButtonLoading] = useState(false);
@@ -489,7 +490,7 @@ const LoadCheckoutPanel = () => {
             const titleMatch = content.match(/Title:\s*(.+)/);
             const artistMatch = content.match(/Artist:\s*(.+)/);
             const imageMatch = content.match(/Image URL:\s*(.+)/);
-            const urlMatch = content.match(/URL:\s*(.+)/); // Broaden to accept any URL
+            const urlMatch = content.match(/URL:\s*(.+)/);
             const changedWordsMatch = content.match(/Changed Words:\s*(.+)/);
             const specialRequestsMatch = content.match(/SPECIAL REQUESTS:\s*([\s\S]*?)(?=\n\nTo continue|$)/);
 
@@ -530,9 +531,9 @@ const LoadCheckoutPanel = () => {
                 artist: artistMatch?.[1]?.trim() || '',
                 url: urlMatch?.[1]?.trim() || '',
                 image: imageMatch?.[1]?.trim() || '',
-                changedWords: changedWordsMatch?.[1]?.split(',').map(w => w.trim()) || [],
-                modifiedLyrics,
-                originalLyrics,
+                changedWords: changedWordsMatch?.[1]?.split(',').map(w => w.trim()).filter(w => w.length > 0) || [], // Added filter to remove empty strings
+                modifiedLyrics: modifiedLyrics.replace(/\n\s+/g, '\n').trim(), // Clean up extra whitespace in modified lyrics
+                originalLyrics: originalLyrics.replace(/\n\s+/g, '\n').trim(), // Clean up extra whitespace in original lyrics
                 lineChanges,
                 specialRequests: specialRequestsMatch?.[1]?.trim() || 'None',
                 deliveryPreference: '',
@@ -561,7 +562,7 @@ const LoadCheckoutPanel = () => {
 
             if (parsed && parsed.title && parsed.artist) {
                 setCheckoutData(parsed);
-                console.log('Parsed checkout data:', parsed); // Debug log
+                console.log('Parsed checkout data:', parsed);
             } else {
                 setParseError('Invalid checkout file format. Please upload a valid checkout progress file.');
                 setCheckoutData(null);
@@ -581,35 +582,50 @@ const LoadCheckoutPanel = () => {
         setIsButtonLoading(true);
 
         try {
-            // Store checkout data in localStorage for the change-lyrics page to use
-            localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+            console.log('=== CHECKOUT LOADING DEBUG ===');
+            console.log('Original checkoutData:', checkoutData);
+            console.log('Changed words before storage:', checkoutData.changedWords);
+            console.log('Modified lyrics preview:', checkoutData.modifiedLyrics.substring(0, 100) + '...');
 
-            // Store the modified lyrics separately for easier access
-            if (checkoutData.modifiedLyrics) {
-                localStorage.setItem('modifiedLyrics', checkoutData.modifiedLyrics);
+            // Clean the checkout data before storing
+            const cleanedCheckoutData = {
+                ...checkoutData,
+                changedWords: checkoutData.changedWords.map(w => w.trim()).filter(w => w.length > 0),
+                modifiedLyrics: checkoutData.modifiedLyrics.trim(),
+                originalLyrics: checkoutData.originalLyrics.trim()
+            };
+
+            console.log('Cleaned checkout data:', cleanedCheckoutData);
+
+            localStorage.setItem('checkoutData', JSON.stringify(cleanedCheckoutData));
+
+            // Verify storage immediately
+            const storedData = localStorage.getItem('checkoutData');
+            console.log('Verification - Data stored successfully:', !!storedData);
+            if (storedData) {
+                const parsed = JSON.parse(storedData);
+                console.log('Verification - Parsed changed words:', parsed.changedWords);
             }
 
-            // Store original lyrics if available
-            if (checkoutData.originalLyrics) {
-                localStorage.setItem('originalLyrics', checkoutData.originalLyrics);
-            }
-
-            // Navigate similar to quick search with URL parameters
             const params = new URLSearchParams({
                 title: checkoutData.title,
                 artist: checkoutData.artist,
                 url: checkoutData.url,
-                loadCheckout: 'true'
+                loadCheckout: 'true',
+                timestamp: Date.now().toString() // Add timestamp to force fresh load
             });
 
-            // Add image parameter if available
             if (checkoutData.image && checkoutData.image !== 'N/A') {
                 params.set('image', checkoutData.image);
             }
 
+            console.log('Navigation params:', params.toString());
+            console.log('=== END CHECKOUT LOADING DEBUG ===');
+
             setTimeout(() => {
                 router.push(`/change-lyrics?${params.toString()}`);
-            }, 50);
+                setIsButtonLoading(false);
+            }, 100); // Increased timeout slightly
         } catch (error) {
             console.error('Error loading checkout:', error);
             toast.error('Error loading checkout', {
@@ -618,7 +634,6 @@ const LoadCheckoutPanel = () => {
             setIsButtonLoading(false);
         }
     };
-
     return (
         <div className="py-6 mt-4 flex flex-1 flex-col gap-4 min-h-[22rem]">
             <p className="text-sm md:text-base text-white font-roboto font-normal tracking-wide">

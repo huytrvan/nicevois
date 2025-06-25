@@ -45,8 +45,12 @@ function ChangeLyricsPageContent() {
     });
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
     const [distinctChangedWords, setDistinctChangedWords] = useState<string[]>([]);
+    const [, setHasFetchedLyrics] = useState(false);
 
-    const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
+    // Add a more comprehensive tracking state for API calls
+    const [fetchState, setFetchState] = useState<'idle' | 'fetching' | 'success' | 'error'>('idle');
+    const fetchInProgressRef = useRef(false);
+    const hasInitializedRef = useRef(false);
 
     const calculateCost = (wordChanges: number): number => {
         if (wordChanges <= 0) return 0;
@@ -55,6 +59,7 @@ function ChangeLyricsPageContent() {
         if (wordChanges <= 20) return 125;
         return 165;
     };
+
     // Updated totalWordChanges calculation
     const totalWordChanges = useMemo(() => {
         const dcw: string[] = getDistinctChangedWords(lyrics);
@@ -64,6 +69,8 @@ function ChangeLyricsPageContent() {
 
     // Calculate cost
     const [cost, setCost] = useState(0);
+
+    // Restore song details from localStorage if not in URL params
     useEffect(() => {
         // Only run if song details are not already set (e.g., from URL params)
         if (!songId && !songTitle && !songArtist && !songImage) {
@@ -91,26 +98,83 @@ function ChangeLyricsPageContent() {
         setIsError(false);
     }, [totalWordChanges]);
 
-    // Manual Entry and Initial State Setup
+    // 1. Handle checkout data loading (separate from API fetching)
+    useEffect(() => {
+        const loadCheckout = searchParams.get('loadCheckout') === 'true';
+
+        if (!loadCheckout) return;
+
+        console.log('=== LOADING CHECKOUT DATA ===');
+
+        try {
+            const checkoutDataStr = localStorage.getItem('checkoutData');
+
+            if (checkoutDataStr) {
+                const parsedCheckoutData: CheckoutData = JSON.parse(checkoutDataStr);
+                console.log('Parsed checkout data:', parsedCheckoutData);
+
+                // Store a flag to indicate we're in checkout mode
+                localStorage.setItem('isCheckoutMode', 'true');
+
+                // Set song details from checkout data
+                if (!songTitle) setSongTitle(parsedCheckoutData.title);
+                if (!songArtist) setSongArtist(parsedCheckoutData.artist);
+                if (!songUrl) setSongUrl(parsedCheckoutData.url);
+                if (!songImage && parsedCheckoutData.image) setSongImage(parsedCheckoutData.image);
+                setSpecialRequests(parsedCheckoutData.specialRequests === 'None' ? '' : parsedCheckoutData.specialRequests);
+
+                // Process checkout data immediately
+                setOriginalLyricsText(parsedCheckoutData.originalLyrics || '');
+                const reconstructedLyrics = reconstructLyricsFromCheckout(parsedCheckoutData.originalLyrics || '', parsedCheckoutData);
+
+                setLyrics(reconstructedLyrics);
+                setFormValues(prev => ({ ...prev, lyrics: parsedCheckoutData.originalLyrics || '' }));
+                setFetchState('success'); // Mark as completed
+                setHasFetchedLyrics(true);
+
+                // Clean up
+                localStorage.removeItem('checkoutData');
+                setIsLoading(false);
+
+                console.log('=== CHECKOUT DATA PROCESSED SUCCESSFULLY ===');
+            } else {
+                setFormErrors(prev => ({
+                    ...prev,
+                    general: 'No checkout data found. Please try uploading the file again.'
+                }));
+                setIsLoading(false);
+                setFetchState('error');
+            }
+        } catch (error) {
+            console.error('Error loading checkout data:', error);
+            setFormErrors(prev => ({
+                ...prev,
+                general: 'Error loading checkout data. Please try again.'
+            }));
+            setIsLoading(false);
+            setFetchState('error');
+        }
+    }, [searchParams, songTitle, songArtist, songUrl, songImage]);
+
+    // 2. Handle manual entry lyrics
     useEffect(() => {
         if (!isManualEntry) return;
 
         try {
             const storedLyrics = localStorage.getItem('manualEntryLyrics');
-            // // console.log('Retrieved manualEntryLyrics:', storedLyrics);
             if (storedLyrics) {
                 setOriginalLyricsText(storedLyrics);
                 setLyrics(generateLyricsData(storedLyrics));
                 setFormValues(prev => ({ ...prev, lyrics: storedLyrics }));
+                setFetchState('success'); // Mark as completed
+                setHasFetchedLyrics(true);
                 console.log('Manual entry lyrics set successfully');
-                setIsLoading(false);
             } else {
                 setFormErrors(prev => ({
                     ...prev,
                     general: 'No lyrics found for manual entry. Please try again.'
                 }));
-                console.log('No manual entry lyrics found in localStorage');
-                setIsLoading(false);
+                setFetchState('error');
             }
         } catch (error) {
             console.error('Error retrieving manual entry lyrics from localStorage:', error);
@@ -118,32 +182,41 @@ function ChangeLyricsPageContent() {
                 ...prev,
                 general: 'Error loading manual entry lyrics. Please try again.'
             }));
+            setFetchState('error');
+        } finally {
             setIsLoading(false);
         }
     }, [isManualEntry]);
 
-    // Move fetchLyricsByTitleAndArtist outside the useEffect
+    // 3. Simplified fetchLyricsByTitleAndArtist function
     const fetchLyricsByTitleAndArtist = useCallback(async (songTitle: string, songArtist: string) => {
+        // Prevent multiple simultaneous requests
+        if (fetchState === 'fetching' || fetchInProgressRef.current) {
+            console.log('Already fetching, skipping request');
+            return;
+        }
+
+        fetchInProgressRef.current = true;
+        setFetchState('fetching');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+            setIsLoading(false);
+            fetchInProgressRef.current = false;
+            setFetchState('error');
+            setFormErrors(prev => ({
+                ...prev,
+                general: 'Request timed out. Please try again.'
+            }));
+            toast.error('Request timed out', {
+                description: 'The lyrics request took too long. Please try again.',
+            });
+        }, 20000);
+
         try {
             setIsLoading(true);
 
-            // Check if we have checkout data to process
-            if (checkoutData && checkoutData.originalLyrics && checkoutData.modifiedLyrics) {
-                console.log('Processing Checkout Data:', checkoutData);
-                setOriginalLyricsText(checkoutData.originalLyrics);
-                const reconstructedLyrics = reconstructLyricsFromCheckout(checkoutData.originalLyrics, checkoutData);
-                console.log('Setting Reconstructed Lyrics:', reconstructedLyrics);
-                setLyrics(reconstructedLyrics);
-                setFormValues(prev => ({ ...prev, lyrics: checkoutData.originalLyrics || '' }));
-
-                // Clean up checkout data
-                localStorage.removeItem('checkoutData');
-                setCheckoutData(null);
-                setIsLoading(false);
-                return; // IMPORTANT: Return early to prevent API call
-            }
-
-            // Only proceed with API call if no checkout data
             const slug = songUrl
                 ? songUrl.replace("https://genius.com/", "").replace(/\/$/, "")
                 : "";
@@ -153,7 +226,13 @@ function ChangeLyricsPageContent() {
                 slug: slug,
             });
 
-            const response = await fetch(`/api/lyrics?${params.toString()}`);
+            console.log('=== MAKING API REQUEST ===', { title: songTitle, artist: songArtist });
+            const response = await fetch(`/api/lyrics?${params.toString()}`, {
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
             if (!response.ok) {
                 if (response.status === 404) {
                     toast.error('Lyrics not found', {
@@ -165,6 +244,7 @@ function ChangeLyricsPageContent() {
                     });
                 }
                 setIsError(true);
+                setFetchState('error');
                 throw new Error(`API error: ${response.status}`);
             }
 
@@ -174,44 +254,68 @@ function ChangeLyricsPageContent() {
                 setOriginalLyricsText(data.lyrics);
                 setLyrics(generateLyricsData(data.lyrics));
                 setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
+                setHasFetchedLyrics(true);
+                setFetchState('success');
+                console.log('=== API REQUEST SUCCESSFUL ===');
             } else {
                 setFormErrors(prev => ({ ...prev, general: 'Lyrics not found' }));
+                setFetchState('error');
             }
         } catch (error) {
+            clearTimeout(timeoutId);
+
+            if (error instanceof Error && error.name === 'AbortError') {
+                setFetchState('idle');
+                return;
+            }
+
             setFormErrors(prev => ({
                 ...prev,
                 general: `Error loading lyrics: ${error instanceof Error ? error.message : 'Unknown error'}`
             }));
+            setFetchState('error');
             console.error('Error fetching lyrics:', error);
         } finally {
             setIsLoading(false);
+            fetchInProgressRef.current = false;
         }
-    }, [checkoutData, songUrl]); // Add checkoutData as dependency
 
-    // Fetch Lyrics from API for Song ID
+        return () => {
+            clearTimeout(timeoutId);
+            controller.abort();
+        };
+    }, [fetchState, songUrl]);
+
+    // 4. Single initialization effect to prevent duplicate API calls
     useEffect(() => {
-        // Skip API fetch if manual entry or required data is missing
-        if (isManualEntry || !songTitle || !songArtist) return;
-
-        // Check if there are saved lyrics in localStorage (for non-checkout scenarios)
-        const savedLyrics = localStorage.getItem('lyrics');
-        const isLoadingCheckout = searchParams.get('loadCheckout') === 'true';
-
-        // Skip if saved lyrics exist and we're not loading checkout
-        if (savedLyrics && !isLoadingCheckout) {
-            return; // Exit early if saved lyrics exist
+        // Skip if already initialized
+        if (hasInitializedRef.current) {
+            return;
         }
 
-        // For checkout loading, wait for checkout data to be set
-        if (isLoadingCheckout && !checkoutData) {
-            return; // Wait for checkout data to be loaded
+        const loadCheckout = searchParams.get('loadCheckout') === 'true';
+        const isCheckoutMode = localStorage.getItem('isCheckoutMode') === 'true';
+
+        // Skip API fetch for these conditions
+        if (isManualEntry || loadCheckout || isCheckoutMode) {
+            hasInitializedRef.current = true;
+            return;
         }
 
-        // Proceed with fetch
-        if (songTitle && songArtist) {
+        // Only fetch if we have both title and artist, and haven't fetched yet
+        if (songTitle && songArtist && fetchState === 'idle') {
+            console.log('=== INITIALIZING LYRICS FETCH ===');
+            hasInitializedRef.current = true;
             fetchLyricsByTitleAndArtist(songTitle, songArtist);
         }
-    }, [songTitle, songArtist, isManualEntry, fetchLyricsByTitleAndArtist, checkoutData, searchParams]);
+    }, [songTitle, songArtist, isManualEntry, searchParams, fetchState, fetchLyricsByTitleAndArtist]);
+
+    // 5. Cleanup effect
+    useEffect(() => {
+        return () => {
+            fetchInProgressRef.current = false;
+        };
+    }, []);
 
     // State Restoration for Non-Manual Entry
     useEffect(() => {
@@ -224,7 +328,6 @@ function ChangeLyricsPageContent() {
             const savedLyrics = localStorage.getItem('lyrics');
             if (savedLyrics) {
                 setLyrics(JSON.parse(savedLyrics));
-                // console.log('Restored saved lyrics:', JSON.parse(savedLyrics));
             }
 
             const savedRequests = localStorage.getItem('specialRequests');
@@ -236,47 +339,11 @@ function ChangeLyricsPageContent() {
             const savedCost = localStorage.getItem('cost');
             if (savedCost) setCost(parseFloat(savedCost));
 
-            // console.log('State restoration completed');
         } catch (error) {
             console.error('Error restoring state from localStorage:', error);
             toast.error('Failed to restore previous changes');
         }
     }, [isManualEntry]); // Run only on mount
-
-    // Add this useEffect to handle checkout data loading
-    useEffect(() => {
-        const loadCheckout = searchParams.get('loadCheckout') === 'true';
-        if (!loadCheckout) return;
-
-        try {
-            const checkoutDataStr = localStorage.getItem('checkoutData');
-            if (checkoutDataStr) {
-                const parsedCheckoutData: CheckoutData = JSON.parse(checkoutDataStr);
-                setCheckoutData(parsedCheckoutData);
-                if (!songTitle) setSongTitle(parsedCheckoutData.title);
-                if (!songArtist) setSongArtist(parsedCheckoutData.artist);
-                if (!songUrl) setSongUrl(parsedCheckoutData.url);
-                if (!songImage && parsedCheckoutData.image) setSongImage(parsedCheckoutData.image);
-                setSpecialRequests(parsedCheckoutData.specialRequests || '');
-
-                // Set loading to false here since we'll handle lyrics in fetchLyricsByTitleAndArtist
-            } else {
-                setFormErrors(prev => ({
-                    ...prev,
-                    general: 'No checkout data found. Please try uploading the file again.'
-                }));
-                setIsLoading(false);
-            }
-        } catch (error) {
-            console.error('Error loading checkout data:', error);
-            setFormErrors(prev => ({
-                ...prev,
-                general: 'Error loading checkout data. Please try again.'
-            }));
-            setIsLoading(false);
-        }
-    }, [searchParams, songTitle, songArtist, songUrl, songImage]);
-
 
     const validateForm = () => {
         const errors: Record<string, string> = {};
@@ -306,7 +373,6 @@ function ChangeLyricsPageContent() {
         setFormErrors(errors);
         return { isValid, errors }; // Return both the validity and the errors object
     };
-
 
     const handleNextStep = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -395,13 +461,13 @@ function ChangeLyricsPageContent() {
         };
     }, []);
 
-
     // Define step data
     const steps: StepProps[] = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },
         { step: 2, label: "Change Lyrics", isActive: currentStep === 2, isComplete: currentStep > 2 },
         { step: 3, label: "Review Order", isActive: currentStep === 3, isComplete: false },
     ];
+
     const NavigationBtn = () => (
         <div className="flex flex-row items-center gap-2 py-0">
             <BackButton href="/" />
@@ -420,11 +486,11 @@ function ChangeLyricsPageContent() {
                             <ChevronRight className="-mr-1 size-4 md:size-5" />
                         </>
                     )}
-
                 </button>
             )}
         </div>
     );
+
     // ... more code
     return (
         <main className="min-h-0 w-full">
@@ -569,11 +635,9 @@ function ChangeLyricsPageContent() {
                                             <p>
                                                 Lyrics Changes ({distinctChangedWords.length} word{distinctChangedWords.length > 1 ? 's' : ''})
                                             </p>
-                                            {distinctChangedWords.length > 0 && (<p className=''>&quot;{
-                                                distinctChangedWords.map((word, index) => (
-                                                    <span key={index} className='inline-block mr-1'>{word} {index != distinctChangedWords.length - 1 ? ', ' : ''}</span>
-                                                ))
-                                            }&quot;</p>)}
+                                            {distinctChangedWords.length > 0 && (
+                                                <p className=''>&quot;{distinctChangedWords.join(', ')}&quot;</p>
+                                            )}
                                         </div>
 
 

@@ -1,3 +1,4 @@
+// src/app/review/page.tsx
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from "react";
@@ -294,6 +295,7 @@ function OrderReviewPageContent() {
         }
     };
 
+    // A snippet from src/app/review/page.tsx to generate the txt file
     const generateDownloadContent = (): string => {
         // Generate original lyrics text for reference
         const originalLyricsText = lyricsData.map(line => line.original).join('\n');
@@ -620,11 +622,9 @@ function OrderReviewPageContent() {
                                     <div className="space-y-2 my-3">
                                         <div className="pb-8 pt-4 px-4 bg-white">
                                             <h4 className="text-lg font-medium text-blue-800">Lyrics Changes ({distinctChangedWords.length} word{distinctChangedWords.length > 1 ? 's' : ''})</h4>
-                                            {distinctChangedWords.length > 0 && (<p>&quot;{
-                                                distinctChangedWords.map((word, index) => (
-                                                    <span key={index} className='inline-block mr-1'>{word} {index != distinctChangedWords.length - 1 ? ', ' : ''}</span>
-                                                ))
-                                            }&quot;</p>)}
+                                            {distinctChangedWords.length > 0 && (
+                                                <p className=''>&quot;{distinctChangedWords.join(', ')}&quot;</p>
+                                            )}
                                             {lyrics.filter(line => line.modified !== line.original).length > 0 ? (
                                                 <div className="overflow-x-auto mt-2">
                                                     <table className="min-w-full border border-gray-200">
