@@ -870,9 +870,8 @@ export const handleResetLine = (
 };
 
 export const reconstructLyricsFromCheckout = (originalLyricsText: string, checkoutData: CheckoutData): LyricLine[] => {
-    const originalLines = originalLyricsText.split('\n').map(line => line.trim());
-    const modifiedLyricsText = checkoutData.modifiedLyrics;
-    const modifiedLines = modifiedLyricsText.split('\n').map(line => line.trim());
+    const originalLines = originalLyricsText.split('\n');
+    const modifiedLines = checkoutData.modifiedLyrics.split('\n');
 
     const reconstructedLyrics: LyricLine[] = [];
     const maxLines = Math.max(originalLines.length, modifiedLines.length);
@@ -881,54 +880,20 @@ export const reconstructLyricsFromCheckout = (originalLyricsText: string, checko
         const originalLine = originalLines[i] || '';
         const modifiedLine = modifiedLines[i] || '';
 
-        const diff = diffWords(originalLine, modifiedLine);
-        const wordChanges: WordChange[] = [];
-        let originalIndex = 0;
-        let newIndex = 0;
+        // Compute wordChanges using calculateWordChanges
+        const wordChanges = calculateWordChanges(originalLine, modifiedLine);
 
-        diff.forEach(part => {
-            const words = part.value.split(/\s+/).filter(w => w.length > 0);
-            words.forEach(word => {
-                if (part.added) {
-                    wordChanges.push({
-                        originalWord: '',
-                        newWord: word,
-                        originalIndex: originalIndex,
-                        newIndex: newIndex,
-                        hasChanged: true,
-                        isAddition: true,
-                        isSubstitution: false,
-                        isDeletion: false
-                    });
-                    newIndex++;
-                } else if (part.removed) {
-                    wordChanges.push({
-                        originalWord: word,
-                        newWord: '',
-                        originalIndex: originalIndex,
-                        newIndex: newIndex,
-                        hasChanged: true,
-                        isDeletion: true,
-                        isAddition: false,
-                        isSubstitution: false
-                    });
-                    originalIndex++;
-                } else {
-                    // Unchanged word
-                    originalIndex++;
-                    newIndex++;
-                }
-            });
-        });
+        // Generate markedText for display consistency
+        const markedText = generateMarkedText(originalLine, modifiedLine, wordChanges);
 
         reconstructedLyrics.push({
             id: i + 1,
             original: originalLine,
             modified: modifiedLine,
+            markedText: markedText,
             wordChanges: wordChanges
         });
     }
 
-    console.log('Reconstructed Lyrics:', reconstructedLyrics); // Debug log
     return reconstructedLyrics;
 };

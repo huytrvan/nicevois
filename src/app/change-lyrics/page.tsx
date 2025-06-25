@@ -126,19 +126,24 @@ function ChangeLyricsPageContent() {
     const fetchLyricsByTitleAndArtist = useCallback(async (songTitle: string, songArtist: string) => {
         try {
             setIsLoading(true);
+
+            // Check if we have checkout data to process
             if (checkoutData && checkoutData.originalLyrics && checkoutData.modifiedLyrics) {
-                console.log('Checkout Data:', checkoutData); // Debug log
+                console.log('Processing Checkout Data:', checkoutData);
                 setOriginalLyricsText(checkoutData.originalLyrics);
                 const reconstructedLyrics = reconstructLyricsFromCheckout(checkoutData.originalLyrics, checkoutData);
-                console.log('Setting Lyrics:', reconstructedLyrics); // Debug log
+                console.log('Setting Reconstructed Lyrics:', reconstructedLyrics);
                 setLyrics(reconstructedLyrics);
                 setFormValues(prev => ({ ...prev, lyrics: checkoutData.originalLyrics || '' }));
+
+                // Clean up checkout data
                 localStorage.removeItem('checkoutData');
                 setCheckoutData(null);
-                return;
+                setIsLoading(false);
+                return; // IMPORTANT: Return early to prevent API call
             }
 
-            // Rest of the function remains unchanged
+            // Only proceed with API call if no checkout data
             const slug = songUrl
                 ? songUrl.replace("https://genius.com/", "").replace(/\/$/, "")
                 : "";
@@ -150,7 +155,6 @@ function ChangeLyricsPageContent() {
 
             const response = await fetch(`/api/lyrics?${params.toString()}`);
             if (!response.ok) {
-                // Error handling remains unchanged
                 if (response.status === 404) {
                     toast.error('Lyrics not found', {
                         description: 'The lyrics for this song could not be found. Please check the song details or try manual entry.',
@@ -163,6 +167,7 @@ function ChangeLyricsPageContent() {
                 setIsError(true);
                 throw new Error(`API error: ${response.status}`);
             }
+
             const data: ExternalLyricsResponse = await response.json();
 
             if (data.lyrics) {
@@ -181,24 +186,32 @@ function ChangeLyricsPageContent() {
         } finally {
             setIsLoading(false);
         }
-    }, [checkoutData, songUrl]);
+    }, [checkoutData, songUrl]); // Add checkoutData as dependency
 
     // Fetch Lyrics from API for Song ID
     useEffect(() => {
         // Skip API fetch if manual entry or required data is missing
         if (isManualEntry || !songTitle || !songArtist) return;
 
-        // Check if there are saved lyrics in localStorage
+        // Check if there are saved lyrics in localStorage (for non-checkout scenarios)
         const savedLyrics = localStorage.getItem('lyrics');
-        if (savedLyrics) {
+        const isLoadingCheckout = searchParams.get('loadCheckout') === 'true';
+
+        // Skip if saved lyrics exist and we're not loading checkout
+        if (savedLyrics && !isLoadingCheckout) {
             return; // Exit early if saved lyrics exist
         }
 
-        // Proceed with fetch if no saved lyrics
+        // For checkout loading, wait for checkout data to be set
+        if (isLoadingCheckout && !checkoutData) {
+            return; // Wait for checkout data to be loaded
+        }
+
+        // Proceed with fetch
         if (songTitle && songArtist) {
             fetchLyricsByTitleAndArtist(songTitle, songArtist);
         }
-    }, [songTitle, songArtist, isManualEntry, fetchLyricsByTitleAndArtist]);
+    }, [songTitle, songArtist, isManualEntry, fetchLyricsByTitleAndArtist, checkoutData, searchParams]);
 
     // State Restoration for Non-Manual Entry
     useEffect(() => {
@@ -245,7 +258,8 @@ function ChangeLyricsPageContent() {
                 if (!songUrl) setSongUrl(parsedCheckoutData.url);
                 if (!songImage && parsedCheckoutData.image) setSongImage(parsedCheckoutData.image);
                 setSpecialRequests(parsedCheckoutData.specialRequests || '');
-                // Remove pendingModifiedLyrics setting; we'll handle it in fetchLyricsByTitleAndArtist
+
+                // Set loading to false here since we'll handle lyrics in fetchLyricsByTitleAndArtist
             } else {
                 setFormErrors(prev => ({
                     ...prev,

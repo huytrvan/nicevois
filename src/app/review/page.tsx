@@ -1,4 +1,3 @@
-// src\app\review\page.tsx
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from "react";
@@ -7,13 +6,11 @@ import { Check, ChevronRight, PackageCheck, ShoppingCart, ChevronDown, ChevronUp
 import React from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Separator from "@radix-ui/react-separator";
-// import SignInToSaveButton from "@/components/SignInToSaveButton";
 import { Toaster, toast } from "sonner";
 import { StepIndicator, StepDivider, type StepProps } from "@/components/layouts/StepNavigation";
 import BackButton from "@/components/BackButton";
 import Image from "next/image";
-
-// src/app/review/page.tsx
+import { stripHtmlAndSymbols, getDistinctChangedWords } from '../change-lyrics/utils'; // Import getDistinctChangedWords
 
 // Type definitions
 type ProductOption = {
@@ -46,49 +43,6 @@ export type LyricLine = {
     markedText?: string;
     wordChanges: WordChange[];
 };
-
-function mergeAdjacentWordChanges(changes: WordChange[]): WordChange[] {
-    if (!changes || changes.length === 0) return changes;
-    const merged: WordChange[] = [];
-    let i = 0;
-    while (i < changes.length) {
-        const current = changes[i];
-        // Only merge adjacent deletion changes if they are not both explicitly generated.
-        if (current.isDeletion && i < changes.length - 1) {
-            const next = changes[i + 1];
-            if (next.isDeletion && next.originalIndex === current.originalIndex + 1) {
-                // If both changes come from an explicit deletion branch, do NOT merge them.
-                if (current.isExplicitDeletion && next.isExplicitDeletion) {
-                    merged.push(current);
-                    i++; // Increment one by one so that explicit deletions remain separate.
-                    continue;
-                }
-                // Otherwise, merge adjacent deletion changes.
-                const mergedChange: WordChange = {
-                    originalWord: current.originalWord + ' ' + next.originalWord,
-                    newWord: current.newWord + ' ' + next.newWord,
-                    originalIndex: current.originalIndex,
-                    newIndex: current.newIndex,
-                    hasChanged: true,
-                    isDeletion: true,
-                    isAddition: false,
-                    isSubstitution: false,
-                };
-                merged.push(mergedChange);
-                i += 2; // Skip the next item that was merged.
-                continue;
-            }
-        }
-        merged.push(current);
-        i++;
-    }
-    return merged;
-}
-
-function containsCJK(text: string): boolean {
-    return /[\u3000-\u303F\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(text);
-}
-
 
 interface CheckoutButtonProps {
     handleCheckout: () => void;
@@ -153,7 +107,7 @@ function OrderReviewPageContent() {
     const [isDisclosureOpen, setIsDisclosureOpen] = useState(false);
     const [hasDownloaded, setHasDownloaded] = useState(false);
 
-    // Memoize processed lyrics from lyricsData.
+    // Memoize processed lyrics from lyricsData
     const lyrics = useMemo(() => {
         return lyricsData
             .map(line => {
@@ -177,70 +131,10 @@ function OrderReviewPageContent() {
             .filter(line => line.wordChanges.length > 0);
     }, [lyricsData]);
 
-    // Compute distinct changed words
+    // Compute distinct changed words using getDistinctChangedWords from utils.ts
     const distinctChangedWords = useMemo(() => {
-        // Helper function to normalize a word:
-        // It removes punctuation (and the deletion marker "🗙") from the start and end, then converts to lowercase.
-        const normalizeWord = (word: string): string => {
-            return word
-                .replace(/^[.,!?;:"'\[\]{}\(\)\-—_🗙]+|[.,!?;:"'\[\]{}\(\)\-—_]+$/g, "")
-                .toLowerCase();
-        };
-
-        // Two sets: one for words added (or substituted) and one for words that only appear in deletion.
-        const additions = new Set<string>();
-        const deletions = new Set<string>();
-
-        lyrics.forEach(line => {
-            // Use merged changes for non-CJK; otherwise, use as-is.
-            const changes = containsCJK(line.original)
-                ? line.wordChanges
-                : mergeAdjacentWordChanges(line.wordChanges);
-
-            changes.forEach(change => {
-                if (change.hasChanged) {
-                    if (change.isSubstitution || change.isAddition) {
-                        // Record addition/substitution words in a normalized way (without any prefix).
-                        const newNorm = normalizeWord(change.newWord);
-                        if (newNorm) {
-                            additions.add(newNorm);
-                        }
-                    } else if (change.isDeletion) {
-                        // Record deletions as normalized words.
-                        const originalNorm = normalizeWord(change.originalWord);
-                        if (originalNorm) {
-                            deletions.add(originalNorm);
-                        }
-                    } else {
-                        // Default fallback: treat as addition.
-                        const fallbackNorm = normalizeWord(change.newWord);
-                        if (fallbackNorm) {
-                            additions.add(fallbackNorm);
-                        }
-                    }
-                }
-            });
-        });
-
-        // For deletions, if a word is found in the additions set,
-        // that means the same word was added elsewhere, so we do not want to use the deletion marker.
-        // We only want the "added" version (i.e. without the 🗙 prefix).
-        const finalDeletions = new Set<string>();
-        deletions.forEach(word => {
-            if (!additions.has(word)) {
-                finalDeletions.add(word);
-            }
-        });
-
-        // Combine the results: words from additions, and for words that appear only as deletion,
-        // prepend the "🗙" marker.
-        const result = new Set<string>([...additions]);
-        finalDeletions.forEach(word => {
-            result.add(`🗙${word}`);
-        });
-
-        return Array.from(result);
-    }, [lyrics]); // Dependencies: Only depend on lyrics
+        return getDistinctChangedWords(lyricsData);
+    }, [lyricsData]);
 
     // Load data from localStorage
     useEffect(() => {
@@ -254,7 +148,7 @@ function OrderReviewPageContent() {
             const storedCost = parseFloat(localStorage.getItem("cost") || "0");
             const storedSpecialRequests = localStorage.getItem("specialRequests") || "";
 
-            setLyricsData(storedLyrics); // ✅ Fixed the incorrect function name
+            setLyricsData(storedLyrics);
             setCost(storedCost);
             setSpecialRequests(storedSpecialRequests);
         } catch (error) {
@@ -262,7 +156,6 @@ function OrderReviewPageContent() {
             toast.error("Failed to load order data");
         }
     }, []);
-
 
     const toggleProductSelection = (productId: string) => {
         setProductOptions((prevOptions) => {
@@ -405,15 +298,21 @@ function OrderReviewPageContent() {
         // Generate original lyrics text for reference
         const originalLyricsText = lyricsData.map(line => line.original).join('\n');
 
-        // Generate modified lyrics text
-        const modifiedLyricsText = lyricsData.map(line => line.modified).join('\n');
+        // Generate modified lyrics text using stripHtmlAndSymbols
+        const modifiedLyricsText = lyricsData.map(line => {
+            if (line.markedText && line.markedText !== line.modified) {
+                return stripHtmlAndSymbols(line.markedText);
+            }
+            return line.modified;
+        }).join('\n');
 
-        // Generate line-by-line changes with line numbers based on full lyricsData
+        // Generate line-by-line changes
         const lineChanges = lyricsData
             .map((line, index) => {
-                // Include the line if it has been modified
-                if (line.original !== line.modified) {
-                    return `Line ${index + 1}: "${line.original}" -> "${line.modified}"`;
+                const hasChanges = line.wordChanges && line.wordChanges.some(change => change.hasChanged);
+                if (hasChanges) {
+                    const processedModified = line.markedText ? stripHtmlAndSymbols(line.markedText) : line.modified;
+                    return `Line ${index + 1}: "${line.original}" -> "${processedModified}"`;
                 }
                 return null;
             })
@@ -434,7 +333,7 @@ function OrderReviewPageContent() {
             `Changed Words: ${distinctChangedWords.join(', ')}`,
             ``,
             `LINE-BY-LINE CHANGES:`,
-            lineChanges || 'No changes detected', // Fallback if no changes
+            lineChanges || 'No changes detected',
             ``,
             `ORIGINAL LYRICS:`,
             originalLyricsText,
@@ -483,9 +382,6 @@ function OrderReviewPageContent() {
         URL.revokeObjectURL(url);
 
         setHasDownloaded(true);
-        // toast.success("Checkout progress file downloaded successfully!", {
-        //     description: "You can now request a sample or save this file for later use."
-        // });
     };
 
     const handleSampleRequest = async () => {
@@ -537,7 +433,7 @@ function OrderReviewPageContent() {
 
             const sampleOrderData = {
                 sessionId,
-                price: 2.00, // Fixed price for sample
+                price: 2.00,
                 numWordChanged: distinctChangedWords.length,
                 wordChanged: distinctChangedWords,
                 songName: songTitle || undefined,
@@ -588,7 +484,6 @@ function OrderReviewPageContent() {
             setIsLoading(false);
         }
     };
-
 
     const steps: StepProps[] = [
         { step: 1, label: "Choose A Song", isActive: currentStep === 1, isComplete: currentStep > 1 },
@@ -704,7 +599,6 @@ function OrderReviewPageContent() {
                                 orientation="horizontal"
                                 style={{ marginBottom: '0.25rem' }}
                             />
-                            {/* Total Cost */}
                             <div className="text-foundation-foreground fixed bottom-0 left-0 right-0 w-full rounded-none border border-blue-300/50 bg-primary md:relative md:rounded-md md:bg-primary/80 mb-8 text-right text-white py-1">
                                 <div className="p-4 flex">
                                     <ShoppingCart className="w-6 h-6 text-white mr-3 ml-1" />
@@ -719,15 +613,6 @@ function OrderReviewPageContent() {
                                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
                                 </div>
                             )}
-
-                            {/* {!isLoading && (
-                                <div className="relative w-full rounded-lg p-4 dark:border-gray-100/5 bg-primary/80 text-white/80" role="alert">
-                                    <div className="flex flex-row gap-2 text-sm md:text-base md:items-center">
-                                        <TicketPercent />
-                                        <strong>You can add discount codes at checkout.</strong>
-                                    </div>
-                                </div>
-                            )} */}
 
                             {!isLoading && (
                                 <div className="flex flex-col space-y-2 overflow-y-auto md:h-auto lg:h-full">
@@ -817,13 +702,11 @@ function OrderReviewPageContent() {
                                                     {product.originalPrice !== undefined && (
                                                         <div className="flex gap-2 md:items-center">
                                                             <span className="font-bold text-gray-700">+US${product.price.toFixed(2)}</span>
-
                                                             <span className="font-bold text-gray-400 line-through">
                                                                 US${product.originalPrice?.toFixed(2) ?? "0.00"}
                                                             </span>
                                                         </div>
                                                     )}
-
                                                 </label>
                                             ))}
                                     </div>
@@ -833,7 +716,7 @@ function OrderReviewPageContent() {
                                         <button
                                             type="button"
                                             onClick={() => setIsDisclosureOpen(!isDisclosureOpen)}
-                                            className="w-full p-4 flex items-center justify-between text-left  transition-colors"
+                                            className="w-full p-4 flex items-center justify-between text-left transition-colors"
                                         >
                                             <span className="font-medium text-gray-500">Request Sample</span>
                                             {isDisclosureOpen ? (
@@ -851,13 +734,13 @@ function OrderReviewPageContent() {
                                                     </p>
 
                                                     <div className="bg-yellow-50 border border-yellow-400 rounded-md p-4 leading-8">
-                                                        <p className=" text-gray-700 mb-2">
+                                                        <p className="text-gray-700 mb-2">
                                                             <strong>Important Notes:</strong>
                                                         </p>
-                                                        <ul className=" text-gray-700 space-y-1 list-disc list-inside">
+                                                        <ul className="text-gray-700 space-y-1 list-disc list-inside">
                                                             <li>We will email you a 10-15 second preview based on the segment that best showcase the final lyric changes, within 2 days.</li>
                                                             <li>This US$2 fee is for the <span className="italic">Request Sample</span> service only and does <span className="text-red-600">not</span> apply toward your full song modification order.</li>
-                                                            <li><span className="italic">Request Sample</span>  is one-time purchase and is <span className="text-red-600">not</span> eligible for refund. Only a full song modification order is eligible for refund. For more details, please visit our <a href="https://nicevois.com/pages/refund-policy" className="text-blue-600 hover:text-blue-700 w-fit hover:underline inline-block" target="_blank" rel="noopener noreferrer" >
+                                                            <li><span className="italic">Request Sample</span> is one-time purchase and is <span className="text-red-600">not</span> eligible for refund. Only a full song modification order is eligible for refund. For more details, please visit our <a href="https://nicevois.com/pages/refund-policy" className="text-blue-600 hover:text-blue-700 w-fit hover:underline inline-block" target="_blank" rel="noopener noreferrer" >
                                                                 Refund Policy page
                                                                 <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
                                                             </a>.
@@ -872,7 +755,7 @@ function OrderReviewPageContent() {
 
                                                     <div className="space-y-3">
                                                         {!hasDownloaded && (
-                                                            <p className="text-center text-sm">Please <span className="italic">Download Checkout Progress (.txt)</span>  file first before <span className="italic">Request Sample</span>.</p>
+                                                            <p className="text-center text-sm">Please <span className="italic">Download Checkout Progress (.txt)</span> file first before <span className="italic">Request Sample</span>.</p>
                                                         )}
                                                         <button
                                                             onClick={handleDownload}
@@ -887,7 +770,7 @@ function OrderReviewPageContent() {
                                                             onClick={handleSampleRequest}
                                                             disabled={isLoading}
                                                             className={`w-full flex items-center justify-center gap-2 p-4 my-2 rounded-md transition-colors bg-blue-600 text-white ${hasDownloaded
-                                                                ? ' hover:bg-blue-700'
+                                                                ? 'hover:bg-blue-700'
                                                                 : 'opacity-30 cursor-not-allowed'
                                                                 }`}
                                                         >
@@ -900,7 +783,6 @@ function OrderReviewPageContent() {
                                                                 </>
                                                             )}
                                                         </button>
-
                                                     </div>
                                                 </div>
                                             </div>
