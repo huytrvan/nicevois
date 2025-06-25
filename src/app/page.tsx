@@ -8,10 +8,9 @@ import React from "react";
 import { useRouter } from 'next/navigation';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
-import { toast } from 'sonner';
+import { Toaster, toast } from 'sonner';
 // import SignInToSaveButton from "@/components/SignInToSaveButton";
 import { StepIndicator, StepDivider, StepProps } from '@/components/layouts/StepNavigation';
-import IframeToaster from '@/components/IframeToaster';
 
 // Types
 type ManualEntryFields = {
@@ -757,7 +756,7 @@ export default function LyricChangerPage() {
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
-                {/* <Toaster
+                <Toaster
                     position="top-center"
                     toastOptions={{
                         style: {
@@ -768,8 +767,7 @@ export default function LyricChangerPage() {
                             fontSize: "1.15rem"
                         },
                     }}
-                /> */}
-                <IframeToaster />
+                />
 
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-4 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
                     {/* Header/Nav */}

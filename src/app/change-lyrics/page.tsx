@@ -16,7 +16,6 @@ import BackButton from '@/components/BackButton';
 import Image from 'next/image';
 import { handleReplaceAll, handleResetLyrics, handleLyricChange, handleResetLine, LyricLine, getDistinctChangedWords, generateLyricsData, CheckoutData, reconstructLyricsFromCheckout } from './utils';
 import { ExternalLyricsResponse } from '../api/lyrics/route';
-import IframeToaster from '../../components/IframeToaster';
 
 // Create a wrapper component that uses useSearchParams
 function ChangeLyricsPageContent() {
