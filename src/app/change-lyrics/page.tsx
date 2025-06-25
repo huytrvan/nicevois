@@ -119,7 +119,7 @@ function ChangeLyricsPageContent() {
                 setLyrics(parsedLyrics);
                 setFetchState('success'); // Mark as completed to prevent API fetch
                 setHasFetchedLyrics(true);
-                console.log('Restored saved lyrics from localStorage');
+                // console.log('Restored saved lyrics from localStorage');
             }
 
             if (savedFormValues) {
@@ -135,7 +135,7 @@ function ChangeLyricsPageContent() {
             if (savedCost) setCost(parseFloat(savedCost));
 
             setIsStateRestored(true);
-            console.log('State restoration completed');
+            // console.log('State restoration completed');
         } catch (error) {
             console.error('Error restoring state from localStorage:', error);
             toast.error('Failed to restore previous changes');
@@ -151,14 +151,14 @@ function ChangeLyricsPageContent() {
 
         if (!loadCheckout) return;
 
-        console.log('=== LOADING CHECKOUT DATA ===');
+        // console.log('=== LOADING CHECKOUT DATA ===');
 
         try {
             const checkoutDataStr = localStorage.getItem('checkoutData');
 
             if (checkoutDataStr) {
                 const parsedCheckoutData: CheckoutData = JSON.parse(checkoutDataStr);
-                console.log('Parsed checkout data:', parsedCheckoutData);
+                // console.log('Parsed checkout data:', parsedCheckoutData);
 
                 // Store a flag to indicate we're in checkout mode
                 localStorage.setItem('isCheckoutMode', 'true');
@@ -183,7 +183,7 @@ function ChangeLyricsPageContent() {
                 localStorage.removeItem('checkoutData');
                 setIsLoading(false);
 
-                console.log('=== CHECKOUT DATA PROCESSED SUCCESSFULLY ===');
+                // console.log('=== CHECKOUT DATA PROCESSED SUCCESSFULLY ===');
             } else {
                 setFormErrors(prev => ({
                     ...prev,
@@ -217,7 +217,7 @@ function ChangeLyricsPageContent() {
                 setFormValues(prev => ({ ...prev, lyrics: storedLyrics }));
                 setFetchState('success'); // Mark as completed
                 setHasFetchedLyrics(true);
-                console.log('Manual entry lyrics set successfully');
+                // console.log('Manual entry lyrics set successfully');
             } else {
                 setFormErrors(prev => ({
                     ...prev,
@@ -241,7 +241,7 @@ function ChangeLyricsPageContent() {
     const fetchLyricsByTitleAndArtist = useCallback(async (songTitle: string, songArtist: string) => {
         // Prevent multiple simultaneous requests
         if (fetchState === 'fetching' || fetchInProgressRef.current) {
-            console.log('Already fetching, skipping request');
+            // console.log('Already fetching, skipping request');
             return;
         }
 
@@ -275,7 +275,7 @@ function ChangeLyricsPageContent() {
                 slug: slug,
             });
 
-            console.log('=== MAKING API REQUEST ===', { title: songTitle, artist: songArtist });
+            // console.log('=== MAKING API REQUEST ===', { title: songTitle, artist: songArtist });
             const response = await fetch(`/api/lyrics?${params.toString()}`, {
                 signal: controller.signal
             });
@@ -305,7 +305,7 @@ function ChangeLyricsPageContent() {
                 setFormValues(prev => ({ ...prev, lyrics: data.lyrics }));
                 setHasFetchedLyrics(true);
                 setFetchState('success');
-                console.log('=== API REQUEST SUCCESSFUL ===');
+                // console.log('=== API REQUEST SUCCESSFUL ===');
             } else {
                 setFormErrors(prev => ({ ...prev, general: 'Lyrics not found' }));
                 setFetchState('error');
@@ -355,7 +355,7 @@ function ChangeLyricsPageContent() {
 
         // Only fetch if we have both title and artist, and haven't fetched yet
         if (songTitle && songArtist && fetchState === 'idle') {
-            console.log('=== INITIALIZING LYRICS FETCH ===');
+            // console.log('=== INITIALIZING LYRICS FETCH ===');
             hasInitializedRef.current = true;
             fetchLyricsByTitleAndArtist(songTitle, songArtist);
         }
@@ -468,7 +468,7 @@ function ChangeLyricsPageContent() {
 
         // Debounce the call with a small delay
         replaceAllTimeoutRef.current = setTimeout(() => {
-            console.log('Executing Replace All...');
+            // console.log('Executing Replace All...');
             handleReplaceAll(replaceTerm, replaceWith, setLyrics, setFormValues, toast);
 
             // Clear the input fields after the replace operation
