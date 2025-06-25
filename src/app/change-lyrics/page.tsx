@@ -51,6 +51,8 @@ function ChangeLyricsPageContent() {
     const [fetchState, setFetchState] = useState<'idle' | 'fetching' | 'success' | 'error'>('idle');
     const fetchInProgressRef = useRef(false);
     const hasInitializedRef = useRef(false);
+    const [isStateRestored, setIsStateRestored] = useState(false);
+
 
     const calculateCost = (wordChanges: number): number => {
         if (wordChanges <= 0) return 0;
@@ -98,8 +100,53 @@ function ChangeLyricsPageContent() {
         setIsError(false);
     }, [totalWordChanges]);
 
+    // State Restoration - This runs FIRST and takes priority
+    useEffect(() => {
+        if (isStateRestored) return; // Prevent multiple restorations
+
+        try {
+            const savedStep = localStorage.getItem('currentStep');
+            if (savedStep) setCurrentStep(parseInt(savedStep, 10));
+
+            const savedLyrics = localStorage.getItem('lyrics');
+            const savedFormValues = localStorage.getItem('formValues');
+            const savedRequests = localStorage.getItem('specialRequests');
+            const savedCost = localStorage.getItem('cost');
+
+            // If we have saved lyrics, restore the complete state
+            if (savedLyrics) {
+                const parsedLyrics = JSON.parse(savedLyrics);
+                setLyrics(parsedLyrics);
+                setFetchState('success'); // Mark as completed to prevent API fetch
+                setHasFetchedLyrics(true);
+                console.log('Restored saved lyrics from localStorage');
+            }
+
+            if (savedFormValues) {
+                const parsedFormValues = JSON.parse(savedFormValues);
+                setFormValues(parsedFormValues);
+                // Also set original lyrics text from form values
+                if (parsedFormValues.lyrics) {
+                    setOriginalLyricsText(parsedFormValues.lyrics);
+                }
+            }
+
+            if (savedRequests) setSpecialRequests(savedRequests);
+            if (savedCost) setCost(parseFloat(savedCost));
+
+            setIsStateRestored(true);
+            console.log('State restoration completed');
+        } catch (error) {
+            console.error('Error restoring state from localStorage:', error);
+            toast.error('Failed to restore previous changes');
+            setIsStateRestored(true); // Mark as restored even on error to prevent retry
+        }
+    }, [isStateRestored]); // Run only once on mount
+
     // 1. Handle checkout data loading (separate from API fetching)
     useEffect(() => {
+        if (!isStateRestored) return; // Wait for state restoration to complete
+
         const loadCheckout = searchParams.get('loadCheckout') === 'true';
 
         if (!loadCheckout) return;
@@ -154,11 +201,13 @@ function ChangeLyricsPageContent() {
             setIsLoading(false);
             setFetchState('error');
         }
-    }, [searchParams, songTitle, songArtist, songUrl, songImage]);
+    }, [searchParams, songTitle, songArtist, songUrl, songImage, isStateRestored]);
 
     // 2. Handle manual entry lyrics
     useEffect(() => {
+        if (!isStateRestored) return; // Wait for state restoration to complete
         if (!isManualEntry) return;
+        if (fetchState === 'success') return; // Skip if state was already restored
 
         try {
             const storedLyrics = localStorage.getItem('manualEntryLyrics');
@@ -186,7 +235,7 @@ function ChangeLyricsPageContent() {
         } finally {
             setIsLoading(false);
         }
-    }, [isManualEntry]);
+    }, [isManualEntry, isStateRestored, fetchState]);
 
     // 3. Simplified fetchLyricsByTitleAndArtist function
     const fetchLyricsByTitleAndArtist = useCallback(async (songTitle: string, songArtist: string) => {
@@ -288,6 +337,8 @@ function ChangeLyricsPageContent() {
 
     // 4. Single initialization effect to prevent duplicate API calls
     useEffect(() => {
+        if (!isStateRestored) return; // Wait for state restoration to complete
+
         // Skip if already initialized
         if (hasInitializedRef.current) {
             return;
@@ -297,7 +348,7 @@ function ChangeLyricsPageContent() {
         const isCheckoutMode = localStorage.getItem('isCheckoutMode') === 'true';
 
         // Skip API fetch for these conditions
-        if (isManualEntry || loadCheckout || isCheckoutMode) {
+        if (isManualEntry || loadCheckout || isCheckoutMode || fetchState === 'success') {
             hasInitializedRef.current = true;
             return;
         }
@@ -308,7 +359,7 @@ function ChangeLyricsPageContent() {
             hasInitializedRef.current = true;
             fetchLyricsByTitleAndArtist(songTitle, songArtist);
         }
-    }, [songTitle, songArtist, isManualEntry, searchParams, fetchState, fetchLyricsByTitleAndArtist]);
+    }, [songTitle, songArtist, isManualEntry, searchParams, fetchState, fetchLyricsByTitleAndArtist, isStateRestored]);
 
     // 5. Cleanup effect
     useEffect(() => {
@@ -316,34 +367,6 @@ function ChangeLyricsPageContent() {
             fetchInProgressRef.current = false;
         };
     }, []);
-
-    // State Restoration for Non-Manual Entry
-    useEffect(() => {
-        if (isManualEntry) return; // Skip restoration for manual entry
-
-        try {
-            const savedStep = localStorage.getItem('currentStep');
-            if (savedStep) setCurrentStep(parseInt(savedStep, 10));
-
-            const savedLyrics = localStorage.getItem('lyrics');
-            if (savedLyrics) {
-                setLyrics(JSON.parse(savedLyrics));
-            }
-
-            const savedRequests = localStorage.getItem('specialRequests');
-            if (savedRequests) setSpecialRequests(savedRequests);
-
-            const savedFormValues = localStorage.getItem('formValues');
-            if (savedFormValues) setFormValues(JSON.parse(savedFormValues));
-
-            const savedCost = localStorage.getItem('cost');
-            if (savedCost) setCost(parseFloat(savedCost));
-
-        } catch (error) {
-            console.error('Error restoring state from localStorage:', error);
-            toast.error('Failed to restore previous changes');
-        }
-    }, [isManualEntry]); // Run only on mount
 
     const validateForm = () => {
         const errors: Record<string, string> = {};
@@ -435,11 +458,9 @@ function ChangeLyricsPageContent() {
 
     const replaceAllTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const handleReplaceAllClick = useCallback((e: React.MouseEvent) => {
-        // Prevent default and stop propagation
-        e.preventDefault();
-        e.stopPropagation();
 
+    // Separate the core replace logic from event handling
+    const executeReplaceAll = useCallback(() => {
         // Clear any existing timeout
         if (replaceAllTimeoutRef.current) {
             clearTimeout(replaceAllTimeoutRef.current);
@@ -449,8 +470,27 @@ function ChangeLyricsPageContent() {
         replaceAllTimeoutRef.current = setTimeout(() => {
             console.log('Executing Replace All...');
             handleReplaceAll(replaceTerm, replaceWith, setLyrics, setFormValues, toast);
+
+            // Clear the input fields after the replace operation
+            setReplaceTerm('');
+            setReplaceWith('');
         }, 100);
     }, [replaceTerm, replaceWith, setLyrics, setFormValues]);
+
+    // Handle keyboard events
+    const handleReplaceWithKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            executeReplaceAll();
+        }
+    }, [executeReplaceAll]);
+
+    // Handle mouse events
+    const handleReplaceAllClick = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        executeReplaceAll();
+    }, [executeReplaceAll]);
 
     // Clean up timeout on unmount
     useEffect(() => {
@@ -802,6 +842,7 @@ function ChangeLyricsPageContent() {
                                                 type="text"
                                                 value={replaceWith}
                                                 onChange={(e) => setReplaceWith(e.target.value)}
+                                                onKeyDown={handleReplaceWithKeyDown}
                                                 placeholder="Replace with..."
                                                 className="flex w-full rounded-md border border-component-input bg-foundation px-3 py-2 ring-offset-foundation placeholder:text-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-foundation-secondary text-sm md:text-base text-primary"
                                             />

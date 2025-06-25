@@ -492,7 +492,7 @@ const LoadCheckoutPanel = () => {
             const imageMatch = content.match(/Image URL:\s*(.+)/);
             const urlMatch = content.match(/URL:\s*(.+)/);
             const changedWordsMatch = content.match(/Changed Words:\s*(.+)/);
-            const specialRequestsMatch = content.match(/SPECIAL REQUESTS:\s*([\s\S]*?)(?=\n\nTo continue|$)/);
+            const specialRequestsMatch = content.match(/SPECIAL REQUESTS:\s*([\s\S]*?)(?=\n\nEND|$)/);
 
             const lineChangesMatch = content.match(/LINE-BY-LINE CHANGES:\s*([\s\S]*?)(?=\n\nORIGINAL LYRICS:|$)/);
             let lineChanges: Array<{ lineNumber: number, original: string, modified: string }> = [];

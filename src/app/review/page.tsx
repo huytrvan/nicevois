@@ -362,6 +362,8 @@ function OrderReviewPageContent() {
             `SPECIAL REQUESTS:`,
             specialRequests || 'None',
             ``,
+            `END`,
+            ``
         ];
 
         return content.join('\n');
