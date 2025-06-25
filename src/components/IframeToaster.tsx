@@ -11,8 +11,12 @@ export default function IframeToaster() {
             const toaster = document.querySelector('[data-sonner-toaster]');
             if (toaster) {
                 if (window.top && window.top !== window.self) {
-                    // If inside an iframe, move the toast container to the parent's body so fixed positioning follows the viewport
-                    window.top.document.body.appendChild(toaster);
+                    // If inside an iframe, attempt to move the toast container to the parent's body so fixed positioning follows the viewport
+                    try {
+                        window.top.document.body.appendChild(toaster);
+                    } catch (error) {
+                        console.error("Unable to append toaster to parent document:", error);
+                    }
                 }
                 (toaster as HTMLElement).style.position = 'fixed';
                 (toaster as HTMLElement).style.top = '1rem';
