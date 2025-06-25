@@ -620,14 +620,14 @@ const LoadCheckoutPanel = () => {
     };
 
     return (
-        <div className="py-6 mt-4 flex flex-1 flex-col gap-4">
+        <div className="py-6 mt-4 flex flex-1 flex-col gap-4 min-h-[22rem]">
             <p className="text-sm md:text-base text-white font-roboto font-normal tracking-wide">
                 Upload your previous checkout file to continue where you left off.
             </p>
 
             <div className="flex flex-col gap-4">
                 <label htmlFor="checkout-file" className="cursor-pointer">
-                    <div className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                    <div className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-400 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
                             <Upload className="w-8 h-8 mb-2 text-gray-500" />
                             <p className="mb-2 text-sm text-gray-500">
@@ -653,14 +653,14 @@ const LoadCheckoutPanel = () => {
 
                 {checkoutData && (
                     <div className="p-4 bg-primary/10 rounded-lg">
-                        <h3 className="text-lg text-white font-azbuka tracking-normal mb-2">
+                        {/* <h3 className="text-lg text-white font-azbuka tracking-normal mb-2">
                             Checkout Preview
-                        </h3>
+                        </h3> */}
 
-                        <div className="flex gap-3 items-start">
+                        <div className="flex gap-3 items-center">
                             {/* Image section */}
                             {checkoutData.image && checkoutData.image !== 'N/A' ? (
-                                <div className="relative w-20 h-20 md:w-24 md:h-24 flex-shrink-0">
+                                <div className="relative w-40 h-40 md:w-32 md:h-32 flex-shrink-0">
                                     <Image
                                         src={checkoutData.image}
                                         alt={checkoutData.title}
@@ -681,14 +681,14 @@ const LoadCheckoutPanel = () => {
 
                             {/* Song details */}
                             <div className="flex-1 min-w-0">
-                                <h4 className="text-base text-white font-azbuka tracking-normal truncate">
+                                <h4 className="text-lg text-white font-azbuka tracking-normal truncate">
                                     {checkoutData.title}
                                 </h4>
-                                <p className="text-sm text-white/80 font-roboto tracking-wide truncate">
+                                <p className="text-sm text-white/80 text-muted font-roboto tracking-wide truncate">
                                     by {checkoutData.artist}
                                 </p>
-                                <p className="text-xs text-white/60 font-roboto mt-1">
-                                    {checkoutData.changedWords.length} words modified
+                                <p className="text-sm text-white/60 font-roboto mt-2">
+                                    ({checkoutData.changedWords.length} word{checkoutData.changedWords.length > 1 ? 's' : ''} modified)
                                 </p>
                                 {checkoutData.generatedOn && (
                                     <p className="text-xs text-white/60 font-roboto">

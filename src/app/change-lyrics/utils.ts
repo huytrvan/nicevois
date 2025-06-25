@@ -877,8 +877,8 @@ export const reconstructLyricsFromCheckout = (originalLyricsText: string, checko
     const maxLines = Math.max(originalLines.length, modifiedLines.length);
 
     for (let i = 0; i < maxLines; i++) {
-        const originalLine = originalLines[i] || '';
-        const modifiedLine = modifiedLines[i] || '';
+        const originalLine = (originalLines[i] || '').trim();
+        const modifiedLine = (modifiedLines[i] || '').trim();
 
         // Compute wordChanges using calculateWordChanges
         const wordChanges = calculateWordChanges(originalLine, modifiedLine);

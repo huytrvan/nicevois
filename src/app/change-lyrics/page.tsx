@@ -426,7 +426,6 @@ function ChangeLyricsPageContent() {
         </div>
     );
     // ... more code
-
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
