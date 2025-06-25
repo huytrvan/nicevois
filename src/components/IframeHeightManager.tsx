@@ -9,9 +9,9 @@ if (process.env.NEXT_PUBLIC_SHOP_ORIGINS == undefined) {
 const SHOP_ORIGINS = String(process.env.NEXT_PUBLIC_SHOP_ORIGINS).split(',');
 
 // Performance constants
-const HEIGHT_THRESHOLD = 5; // Only send updates if height changes by more than 5px
-const DEBOUNCE_DELAY = 16; // ~60fps
-const MUTATION_DEBOUNCE_DELAY = 100; // Longer delay for mutations
+const HEIGHT_THRESHOLD = 5;
+const DEBOUNCE_DELAY = 16;
+const MUTATION_DEBOUNCE_DELAY = 100;
 
 export default function IframeHeightManager() {
     const lastHeightRef = useRef<number>(0);
@@ -33,6 +33,26 @@ export default function IframeHeightManager() {
         }
     }, []);
 
+    // New function to handle toast positioning in iframe
+    const updateToastPosition = useCallback(() => {
+        if (typeof window === "undefined" || !isEmbeddedInShopify()) return;
+
+        const toasterElement = document.querySelector('[data-sonner-toaster]') as HTMLElement;
+        if (!toasterElement) return;
+
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+
+        // Update CSS custom property for scroll position
+        document.documentElement.style.setProperty('--scroll-top', `${scrollTop}px`);
+
+        // Direct positioning approach
+        toasterElement.style.position = 'absolute';
+        toasterElement.style.top = `${scrollTop + 20}px`;
+        toasterElement.style.left = '50%';
+        toasterElement.style.transform = 'translateX(-50%)';
+        toasterElement.style.zIndex = '9999';
+    }, [isEmbeddedInShopify]);
+
     const getDocumentHeight = useCallback(() => {
         if (typeof window === "undefined" || typeof document === "undefined") {
             return 400;
@@ -44,7 +64,7 @@ export default function IframeHeightManager() {
 
         const mainContent = document.getElementById("main-content");
         if (mainContent) {
-            return mainContent.scrollHeight + 150; // add 150px padding
+            return mainContent.scrollHeight + 150;
         }
 
         const { body, documentElement: html } = document;
@@ -120,8 +140,11 @@ export default function IframeHeightManager() {
 
             lastHeightRef.current = height;
             sendHeightToParent(height, force);
+
+            // Update toast position when height changes
+            updateToastPosition();
         });
-    }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent]);
+    }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent, updateToastPosition]);
 
     const throttledMutationUpdate = useCallback(() => {
         if (mutationDebounceTimerRef.current) {
@@ -140,7 +163,9 @@ export default function IframeHeightManager() {
 
         isInitializedRef.current = true;
 
-        // Staggered initial measurements with exponential backoff
+        // Add iframe class to body for CSS targeting
+        document.body.classList.add('iframe-embedded');
+
         const initialDelays = [0, 16, 50, 150, 400, 1000];
         const timeoutIds = initialDelays.map((delay, index) =>
             setTimeout(() => debouncedHeightUpdate(index === 0), delay)
@@ -158,9 +183,7 @@ export default function IframeHeightManager() {
             const mainContent = document.getElementById("main-content");
             if (mainContent) {
                 observerRef.current.observe(mainContent);
-            }
-            // Observe body only if main-content doesn't exist
-            else if (document.body) {
+            } else if (document.body) {
                 observerRef.current.observe(document.body);
             }
         }
@@ -170,7 +193,21 @@ export default function IframeHeightManager() {
             mutationObserverRef.current = new MutationObserver((mutations) => {
                 // Filter out irrelevant mutations
                 const relevantMutation = mutations.some(mutation => {
-                    if (mutation.type === 'childList') return true;
+                    if (mutation.type === 'childList') {
+                        // Check if toast elements were added/removed
+                        const addedNodes = Array.from(mutation.addedNodes);
+                        const removedNodes = Array.from(mutation.removedNodes);
+                        const hasToastChanges = [...addedNodes, ...removedNodes].some(node =>
+                            node instanceof Element &&
+                            (node.matches('[data-sonner-toaster]') || node.querySelector('[data-sonner-toaster]'))
+                        );
+
+                        if (hasToastChanges) {
+                            setTimeout(updateToastPosition, 50);
+                        }
+
+                        return true;
+                    }
                     if (mutation.type === 'attributes') {
                         const attr = mutation.attributeName;
                         return attr === 'style' || attr === 'class' || attr === 'height' || attr === 'hidden';
@@ -188,8 +225,8 @@ export default function IframeHeightManager() {
                 subtree: true,
                 attributes: true,
                 attributeFilter: ["style", "class", "height", "hidden"],
-                attributeOldValue: false, // Don't store old values for better performance
-                characterData: false, // Don't observe text changes
+                attributeOldValue: false,
+                characterData: false,
             });
         }
 
@@ -198,19 +235,29 @@ export default function IframeHeightManager() {
             if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
             }
-            debounceTimerRef.current = setTimeout(debouncedHeightUpdate, DEBOUNCE_DELAY);
+            debounceTimerRef.current = setTimeout(() => {
+                debouncedHeightUpdate();
+                updateToastPosition();
+            }, DEBOUNCE_DELAY);
         };
 
         const handleLoad = () => {
-            setTimeout(() => debouncedHeightUpdate(true), 50);
+            setTimeout(() => {
+                debouncedHeightUpdate(true);
+                updateToastPosition();
+            }, 50);
         };
 
         const handleDOMContentLoaded = () => {
-            setTimeout(() => debouncedHeightUpdate(true), 16);
+            setTimeout(() => {
+                debouncedHeightUpdate(true);
+                updateToastPosition();
+            }, 16);
         };
 
         const handleScroll = () => {
             debouncedHeightUpdate();
+            updateToastPosition(); // Update toast position on scroll
         };
 
         window.addEventListener("resize", handleResize, { passive: true });
@@ -238,9 +285,12 @@ export default function IframeHeightManager() {
             window.removeEventListener("load", handleLoad);
             window.removeEventListener("scroll", handleScroll);
             document.removeEventListener("DOMContentLoaded", handleDOMContentLoaded);
+
+            // Clean up iframe class
+            document.body.classList.remove('iframe-embedded');
             isInitializedRef.current = false;
         };
-    }, [debouncedHeightUpdate, throttledMutationUpdate, isEmbeddedInShopify]);
+    }, [debouncedHeightUpdate, throttledMutationUpdate, isEmbeddedInShopify, updateToastPosition]);
 
     return null;
 }

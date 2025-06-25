@@ -10,7 +10,7 @@ import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
 import * as Separator from '@radix-ui/react-separator';
 // import SignInToSaveButton from "@/components/SignInToSaveButton";
-import { toast } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { StepIndicator, StepDivider, type StepProps } from '@/components/layouts/StepNavigation';
 import BackButton from '@/components/BackButton';
 import Image from 'next/image';
@@ -537,7 +537,7 @@ function ChangeLyricsPageContent() {
     return (
         <main className="min-h-0 w-full">
             <div className="w-full min-h-full">
-                {/* <Toaster
+                <Toaster
                     position="top-center"
                     toastOptions={{
                         style: {
@@ -548,8 +548,7 @@ function ChangeLyricsPageContent() {
                             fontSize: "1.15rem"
                         },
                     }}
-                /> */}
-                <IframeToaster />
+                />
                 <section className="mx-auto w-full max-w-[1280px] flex flex-col space-y-2 px-6 sm:px-12 md:px-16 lg:px-32 xl:px-40 2xl:px-52">
                     {/* Header/Nav */}
                     <nav className="w-full bg-transparent px-4 pb-4">
