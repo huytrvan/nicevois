@@ -518,8 +518,15 @@ function ChangeLyricsPageContent() {
                         onClick={(e) => handleNextStep(e, '/review-sample')}
                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 text-primary bg-primary text-white opacity-80 hover:opacity-90 hover:ring-blue-900/50 focus-visible:ring focus-visible:ring-blue-900/50 active:opacity-90 active:ring-0 px-2 rounded-md text-sm md:text-base h-10 md:h-12 mr-1"
                     >
-                        <AudioLines className="-ml-1 size-4 md:size-5 -mt-[0.05rem]" />
-                        View Sample
+                        {isLoading ? (
+                            "Processing..."
+                        ) : (
+                            <>
+                                <AudioLines className="-ml-1 size-4 md:size-5 -mt-[0.05rem]" />
+                                View Sample
+                            </>
+                        )}
+
                     </button>
                     <button
                         onClick={(e) => handleNextStep(e, '/review')}
