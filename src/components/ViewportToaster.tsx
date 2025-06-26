@@ -1,4 +1,3 @@
-// src/components/ViewportToaster.tsx
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -48,10 +47,9 @@ export default function ViewportToaster() {
     }, []);
 
     const calculateToasterPosition = useCallback((viewportData: ParentViewportInfo) => {
-        const { scrollTop, viewportHeight, iframeTop, iframeHeight } = viewportData;
+        const { viewportHeight, iframeTop, iframeHeight } = viewportData;
 
         // Calculate how much of the iframe is visible in the parent viewport
-        const iframeBottom = iframeTop + iframeHeight;
         const visibleTop = Math.max(0, -iframeTop);
         const visibleBottom = Math.min(iframeHeight, viewportHeight - iframeTop);
 
@@ -83,7 +81,7 @@ export default function ViewportToaster() {
             setToasterOffset(newOffset);
         };
 
-        const handleIframeHeightChange = (event: CustomEvent) => {
+        const handleIframeHeightChange = () => {
             // When iframe height changes, recalculate position if we have parent viewport data
             if (parentViewport) {
                 const newOffset = calculateToasterPosition(parentViewport);
