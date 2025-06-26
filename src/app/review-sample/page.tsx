@@ -135,9 +135,9 @@ function OrderReviewPageContent() {
             ``,
             `/*******************************************************************`,
             ` *                                                                 *`,
-            ` *  USAGE: To continue with your order, go to                      *`,
+            ` *  USAGE: To continue with your last checkout, go to              *`,
             ` *  "https://nicevois.com/products/change-song-lyrics" and select  *`,
-            ` *  the "Load Checkout" tab.                                       *`,
+            ` *  the "Load Checkout" tab to load this file.                     *`,
             ` *                                                                 *`,
             ` *******************************************************************/`,
             ``,
@@ -165,7 +165,7 @@ function OrderReviewPageContent() {
             `SPECIAL REQUESTS:`,
             specialRequests || 'None',
             ``,
-            `END`,
+            `END-OF-FILE`,
             ``
         ];
 
