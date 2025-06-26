@@ -1,4 +1,4 @@
-// src/components/IframeHeightManager.tsx (Ultra-Performance Optimized)
+// src/components/IframeHeightManager.tsx (Performance Optimized)
 "use client";
 import { useEffect, useRef, useCallback } from "react";
 
@@ -8,16 +8,12 @@ if (process.env.NEXT_PUBLIC_SHOP_ORIGINS == undefined) {
 
 const SHOP_ORIGINS = String(process.env.NEXT_PUBLIC_SHOP_ORIGINS).split(',');
 
-// Ultra-optimized performance constants
-const PERF_CONFIG = {
-    HEIGHT_THRESHOLD: 2,
-    CRITICAL_HEIGHT_THRESHOLD: 8, // Reduced for better responsiveness
-    DEBOUNCE_DELAY: 8, // Ultra-fast debouncing (~120fps)
-    MUTATION_DEBOUNCE_DELAY: 32, // Reduced mutation delay
-    RESIZE_DEBOUNCE_DELAY: 8, // Faster resize response
-    CACHE_DURATION: 16, // Shorter cache for more accuracy
-    RAF_THROTTLE_MS: 16 // ~60fps cap
-};
+// Optimized performance constants
+const HEIGHT_THRESHOLD = 3; // Reduced threshold for smoother updates
+const CRITICAL_HEIGHT_THRESHOLD = 10; // For critical changes that bypass debouncing
+const DEBOUNCE_DELAY = 8; // Reduced for smoother experience (~120fps)
+const MUTATION_DEBOUNCE_DELAY = 50; // Reduced mutation delay
+const RESIZE_DEBOUNCE_DELAY = 16; // Separate resize delay
 
 interface MessageData {
     type: string;
@@ -32,197 +28,151 @@ interface MessageData {
     [key: string]: unknown;
 }
 
+interface QueuedMessage {
+    message: MessageData;
+    timestamp: number;
+}
+
 export default function IframeHeightManager() {
-    // Consolidated state in single ref for better performance
-    const stateRef = useRef({
-        lastHeight: 0,
-        lastSentHeight: 0,
-        isInitialized: false,
-        isCalculating: false,
-        cachedHeight: 0,
-        lastCalculationTime: 0,
-        isEmbedded: false,
-        lastRAF: 0,
-        messageQueue: [] as MessageData[],
-        isProcessingQueue: false,
-        pendingNotifications: new Set<string>(),
-        readyMessagesSent: 0
-    });
+    const lastHeightRef = useRef<number>(0);
+    const lastSentHeightRef = useRef<number>(0);
+    const observerRef = useRef<ResizeObserver | null>(null);
+    const mutationObserverRef = useRef<MutationObserver | null>(null);
+    const isInitializedRef = useRef<boolean>(false);
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const mutationDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const resizeDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const rafIdRef = useRef<number | null>(null);
+    const isCalculatingRef = useRef<boolean>(false);
+    const cachedHeightRef = useRef<number>(0);
+    const lastCalculationTimeRef = useRef<number>(0);
 
-    // Consolidated timers ref
-    const timersRef = useRef({
-        debounce: null as NodeJS.Timeout | null,
-        mutationDebounce: null as NodeJS.Timeout | null,
-        resizeDebounce: null as NodeJS.Timeout | null,
-        notificationBatch: null as number | null,
-        raf: null as number | null,
-        messageProcess: null as number | null
-    });
-
-    // Consolidated observers ref
-    const observersRef = useRef({
-        resize: null as ResizeObserver | null,
-        mutation: null as MutationObserver | null
-    });
-
-    // Ultra-optimized embedded check (memoized)
-    const checkEmbedded = useCallback(() => {
-        if (stateRef.current.isEmbedded !== undefined) {
-            return stateRef.current.isEmbedded;
-        }
-
+    const isEmbeddedInShopify = useCallback(() => {
+        if (typeof window === "undefined") return false;
         try {
-            const embedded = window.parent !== window || window.top !== window;
-            stateRef.current.isEmbedded = embedded;
-            return embedded;
+            return window.parent !== window || window.top !== window;
         } catch {
-            stateRef.current.isEmbedded = true;
             return true;
         }
     }, []);
 
-    // Ultra-optimized height calculation with better caching strategy
+    // Optimized height calculation with caching
     const getDocumentHeight = useCallback(() => {
         if (typeof window === "undefined" || typeof document === "undefined") {
             return 400;
         }
 
-        const state = stateRef.current;
-        const now = performance.now();
-
-        // Enhanced caching with document state check
         if (document.readyState === "loading") {
-            return state.cachedHeight || 400;
+            return cachedHeightRef.current || 400;
         }
 
-        // Use cached value if very recent
-        if (now - state.lastCalculationTime < PERF_CONFIG.CACHE_DURATION && state.cachedHeight > 0) {
-            return state.cachedHeight;
+        // Cache for 16ms to avoid redundant calculations
+        const now = performance.now();
+        if (now - lastCalculationTimeRef.current < 16 && cachedHeightRef.current > 0) {
+            return cachedHeightRef.current;
         }
 
         const mainContent = document.getElementById("main-content");
         let height: number;
 
         if (mainContent) {
-            // Ultra-optimized main content measurement
+            // More accurate calculation for main content
             const rect = mainContent.getBoundingClientRect();
-            const style = window.getComputedStyle(mainContent);
-
-            // Use parseFloat with fallback for better performance
-            const marginTop = parseFloat(style.marginTop) || 0;
-            const marginBottom = parseFloat(style.marginBottom) || 0;
-            const padding = 100; // Static padding for performance
+            const computedStyle = window.getComputedStyle(mainContent);
+            const marginTop = parseFloat(computedStyle.marginTop) || 0;
+            const marginBottom = parseFloat(computedStyle.marginBottom) || 0;
 
             height = Math.max(
-                mainContent.scrollHeight + marginTop + marginBottom + padding,
-                rect.height + marginTop + marginBottom + padding,
+                mainContent.scrollHeight + marginTop + marginBottom + 100,
+                rect.height + marginTop + marginBottom + 100,
                 200
             );
         } else {
-            // Fallback measurement with optimized access
-            const { body, documentElement } = document;
+            const { body, documentElement: html } = document;
             height = Math.max(
                 body.scrollHeight,
-                documentElement.scrollHeight,
+                html.scrollHeight,
                 body.offsetHeight,
-                documentElement.offsetHeight,
+                html.offsetHeight,
+                body.clientHeight,
+                html.clientHeight,
                 200
             );
         }
 
-        // Update cache
-        state.cachedHeight = height;
-        state.lastCalculationTime = now;
+        cachedHeightRef.current = height;
+        lastCalculationTimeRef.current = now;
         return height;
     }, []);
 
-    // Ultra-batched notification system
-    const notifyToastOfChanges = useCallback((eventType = 'height-change') => {
-        const state = stateRef.current;
-        const timers = timersRef.current;
+    // Batch multiple notifications to prevent spam
+    const pendingNotificationsRef = useRef<Set<string>>(new Set());
+    const notificationBatchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-        state.pendingNotifications.add(eventType);
-
-        if (!timers.notificationBatch) {
-            timers.notificationBatch = requestAnimationFrame(() => {
-                if (state.pendingNotifications.size > 0) {
-                    window.dispatchEvent(new CustomEvent('iframe-height-changed', {
-                        detail: {
-                            height: getDocumentHeight(),
-                            timestamp: performance.now(),
-                            batchedEvents: Array.from(state.pendingNotifications)
-                        }
-                    }));
-                    state.pendingNotifications.clear();
-                }
-                timers.notificationBatch = null;
-            });
+    const batchedNotifyToast = useCallback(() => {
+        if (notificationBatchTimerRef.current) {
+            clearTimeout(notificationBatchTimerRef.current);
         }
+
+        notificationBatchTimerRef.current = setTimeout(() => {
+            if (pendingNotificationsRef.current.size > 0) {
+                window.dispatchEvent(new CustomEvent('iframe-height-changed', {
+                    detail: {
+                        height: getDocumentHeight(),
+                        timestamp: performance.now(),
+                        batchedEvents: Array.from(pendingNotificationsRef.current)
+                    }
+                }));
+                pendingNotificationsRef.current.clear();
+            }
+        }, 8);
     }, [getDocumentHeight]);
 
-    // Ultra-optimized message queue processing
+    const notifyToastOfChanges = useCallback((eventType = 'height-change') => {
+        pendingNotificationsRef.current.add(eventType);
+        batchedNotifyToast();
+    }, [batchedNotifyToast]);
+
+    // Optimized message sending with connection pooling
+    const messageQueueRef = useRef<Array<QueuedMessage>>([]);
+    const isProcessingQueueRef = useRef<boolean>(false);
+
     const processMessageQueue = useCallback(() => {
-        const state = stateRef.current;
-        const timers = timersRef.current;
-
-        if (state.isProcessingQueue || state.messageQueue.length === 0) {
+        if (isProcessingQueueRef.current || messageQueueRef.current.length === 0) {
             return;
         }
 
-        // RAF throttling for message processing
-        const now = performance.now();
-        if (now - state.lastRAF < PERF_CONFIG.RAF_THROTTLE_MS) {
-            // Schedule for next available frame
-            if (!timers.messageProcess) {
-                timers.messageProcess = requestAnimationFrame(() => {
-                    timers.messageProcess = null;
-                    processMessageQueue();
-                });
+        isProcessingQueueRef.current = true;
+
+        // Process latest message only (drop duplicates)
+        const latestMessage = messageQueueRef.current[messageQueueRef.current.length - 1];
+        messageQueueRef.current = [];
+
+        SHOP_ORIGINS.forEach((origin) => {
+            try {
+                window.parent.postMessage(latestMessage.message, origin);
+            } catch {
+                // Silent fail for performance
             }
-            return;
-        }
+        });
 
-        state.isProcessingQueue = true;
-        state.lastRAF = now;
-
-        try {
-            // Process latest message only (drop intermediates)
-            const latestMessage = state.messageQueue[state.messageQueue.length - 1];
-            state.messageQueue.length = 0; // Clear queue efficiently
-
-            // Batch send to all origins
-            const promises = SHOP_ORIGINS.map(origin => {
-                try {
-                    window.parent.postMessage(latestMessage, origin);
-                    return Promise.resolve();
-                } catch {
-                    return Promise.reject();
-                }
-            });
-
-            // Fire and forget - don't wait for completion
-            Promise.allSettled(promises);
-        } finally {
-            state.isProcessingQueue = false;
-        }
+        isProcessingQueueRef.current = false;
     }, []);
 
-    // Ultra-optimized height sending with intelligent batching
     const sendHeightToParent = useCallback((height: number, force = false) => {
-        if (!checkEmbedded()) return;
+        if (typeof window === "undefined") return;
 
-        const state = stateRef.current;
-        const previousHeight = state.lastSentHeight;
+        const previousHeight = lastSentHeightRef.current;
         const heightDiff = Math.abs(height - previousHeight);
 
-        // Enhanced skip logic
-        if (!force && heightDiff < PERF_CONFIG.HEIGHT_THRESHOLD) {
+        // Skip if height change is too small and not forced
+        if (!force && heightDiff < HEIGHT_THRESHOLD) {
             return;
         }
 
-        state.lastSentHeight = height;
+        lastSentHeightRef.current = height;
         const isReduction = height < previousHeight;
-        const isCritical = heightDiff > PERF_CONFIG.CRITICAL_HEIGHT_THRESHOLD;
+        const isCritical = heightDiff > CRITICAL_HEIGHT_THRESHOLD;
 
         const message: MessageData = {
             type: "iframe-height",
@@ -236,264 +186,298 @@ export default function IframeHeightManager() {
             isCritical
         };
 
-        // Notify toast system
+        // Notify toast component
         notifyToastOfChanges('height-update');
 
         if (isCritical || isReduction) {
             // Send critical updates immediately
-            SHOP_ORIGINS.forEach(origin => {
+            SHOP_ORIGINS.forEach((origin) => {
                 try {
                     window.parent.postMessage(message, origin);
                 } catch {
-                    // Silent fail for performance
+                    // Silent fail
                 }
             });
         } else {
             // Queue non-critical updates
-            state.messageQueue.push(message);
-            processMessageQueue();
+            messageQueueRef.current.push({ message, timestamp: performance.now() });
+
+            // Process queue on next frame
+            requestAnimationFrame(processMessageQueue);
         }
-    }, [checkEmbedded, notifyToastOfChanges, processMessageQueue]);
+    }, [notifyToastOfChanges, processMessageQueue]);
 
-    // Ultra-optimized debounced height update with RAF integration
+    // Ultra-optimized debounced height update
     const debouncedHeightUpdate = useCallback((force = false, source = 'unknown') => {
-        if (!checkEmbedded()) return;
-
-        const state = stateRef.current;
-        const timers = timersRef.current;
+        if (!isEmbeddedInShopify()) return;
 
         // Prevent multiple simultaneous calculations
-        if (state.isCalculating && !force) {
+        if (isCalculatingRef.current && !force) {
             return;
         }
 
-        // Clear previous operations
-        if (timers.raf) cancelAnimationFrame(timers.raf);
-        if (timers.debounce) clearTimeout(timers.debounce);
+        // Cancel previous operations
+        if (rafIdRef.current) {
+            cancelAnimationFrame(rafIdRef.current);
+        }
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
 
         const executeUpdate = () => {
-            if (state.isCalculating && !force) return;
+            if (isCalculatingRef.current && !force) return;
 
-            state.isCalculating = true;
+            isCalculatingRef.current = true;
 
             try {
                 const height = getDocumentHeight();
-                const heightDiff = Math.abs(height - state.lastHeight);
+                const heightDiff = Math.abs(height - lastHeightRef.current);
 
-                if (heightDiff >= PERF_CONFIG.HEIGHT_THRESHOLD || force) {
-                    state.lastHeight = height;
+                // Only update if there's a meaningful change
+                if (heightDiff >= HEIGHT_THRESHOLD || force) {
+                    lastHeightRef.current = height;
                     sendHeightToParent(height, force);
                 }
             } finally {
-                state.isCalculating = false;
+                isCalculatingRef.current = false;
             }
         };
 
         if (force || source === 'resize') {
-            // Execute immediately for critical updates
-            timers.raf = requestAnimationFrame(executeUpdate);
+            // Execute immediately for forced updates or resize
+            rafIdRef.current = requestAnimationFrame(executeUpdate);
         } else {
-            // Micro-debounce for other updates
-            timers.debounce = setTimeout(() => {
-                timers.raf = requestAnimationFrame(executeUpdate);
-            }, PERF_CONFIG.DEBOUNCE_DELAY);
+            // Debounce for other updates
+            debounceTimerRef.current = setTimeout(() => {
+                rafIdRef.current = requestAnimationFrame(executeUpdate);
+            }, DEBOUNCE_DELAY);
         }
-    }, [checkEmbedded, getDocumentHeight, sendHeightToParent]);
+    }, [isEmbeddedInShopify, getDocumentHeight, sendHeightToParent]);
 
-    // Ultra-optimized mutation handling
+    // Optimized mutation handling with intelligent filtering
     const throttledMutationUpdate = useCallback(() => {
-        const timers = timersRef.current;
-
-        if (timers.mutationDebounce) {
-            clearTimeout(timers.mutationDebounce);
+        if (mutationDebounceTimerRef.current) {
+            clearTimeout(mutationDebounceTimerRef.current);
         }
 
-        timers.mutationDebounce = setTimeout(() => {
+        mutationDebounceTimerRef.current = setTimeout(() => {
             debouncedHeightUpdate(false, 'mutation');
-        }, PERF_CONFIG.MUTATION_DEBOUNCE_DELAY);
+        }, MUTATION_DEBOUNCE_DELAY);
     }, [debouncedHeightUpdate]);
 
-    // Ultra-optimized resize handling
+    // Optimized resize handling
     const throttledResizeUpdate = useCallback(() => {
-        const timers = timersRef.current;
-        const state = stateRef.current;
-
-        if (timers.resizeDebounce) {
-            clearTimeout(timers.resizeDebounce);
+        if (resizeDebounceTimerRef.current) {
+            clearTimeout(resizeDebounceTimerRef.current);
         }
 
-        // Clear cache on resize for accuracy
-        state.lastCalculationTime = 0;
-        state.cachedHeight = 0;
-
-        timers.resizeDebounce = setTimeout(() => {
+        resizeDebounceTimerRef.current = setTimeout(() => {
             debouncedHeightUpdate(true, 'resize');
-        }, PERF_CONFIG.RESIZE_DEBOUNCE_DELAY);
+        }, RESIZE_DEBOUNCE_DELAY);
     }, [debouncedHeightUpdate]);
 
-    // Ultra-optimized message handling with better buffering
+    // Enhanced message handling with better performance
     useEffect(() => {
         const messageBuffer = new Map<string, MessageData>();
-        let bufferTimer: number | null = null;
-
-        const processBuffer = () => {
-            messageBuffer.forEach((data) => {
-                if (data.type === 'parent-scroll-info' || data.type === 'parent-resize-info') {
-                    window.dispatchEvent(new CustomEvent('parent-viewport-change', {
-                        detail: data
-                    }));
-                }
-            });
-            messageBuffer.clear();
-            bufferTimer = null;
-        };
+        let messageProcessTimer: NodeJS.Timeout | null = null;
 
         const handleParentMessage = (event: MessageEvent) => {
             const { data } = event;
+
             if (!data?.type) return;
 
-            // Enhanced message filtering
+            // Buffer messages to prevent spam
             if (data.type === 'parent-scroll-info' || data.type === 'parent-resize-info') {
                 messageBuffer.set(data.type, data);
 
-                if (!bufferTimer) {
-                    bufferTimer = requestAnimationFrame(processBuffer);
+                if (messageProcessTimer) {
+                    clearTimeout(messageProcessTimer);
                 }
-            } else if (data.type === 'request-scroll-updates') {
-                // Limit ready message spam
-                const state = stateRef.current;
-                if (state.readyMessagesSent < 3) {
-                    try {
-                        window.parent.postMessage({
-                            type: 'iframe-ready-for-scroll-updates',
-                            source: 'IframeHeightManager',
-                            timestamp: performance.now()
-                        }, '*');
-                        state.readyMessagesSent++;
-                    } catch {
-                        // Silent fail
-                    }
+
+                messageProcessTimer = setTimeout(() => {
+                    // Process buffered messages
+                    messageBuffer.forEach((bufferedData) => {
+                        window.dispatchEvent(new CustomEvent('parent-viewport-change', {
+                            detail: bufferedData
+                        }));
+                    });
+                    messageBuffer.clear();
+                }, 8); // Process every ~120fps
+            }
+
+            if (data.type === 'request-scroll-updates') {
+                try {
+                    window.parent.postMessage({
+                        type: 'iframe-ready-for-scroll-updates',
+                        source: 'IframeHeightManager',
+                        timestamp: performance.now()
+                    }, '*');
+                } catch {
+                    // Silent fail
                 }
             }
         };
 
-        window.addEventListener('message', handleParentMessage, { passive: true });
+        window.addEventListener('message', handleParentMessage);
 
         return () => {
-            if (bufferTimer) cancelAnimationFrame(bufferTimer);
+            if (messageProcessTimer) {
+                clearTimeout(messageProcessTimer);
+            }
             window.removeEventListener('message', handleParentMessage);
         };
     }, []);
 
-    // Optimized initialization sequence
+    // Send initial ready message (optimized)
     useEffect(() => {
-        const state = stateRef.current;
+        if (!isEmbeddedInShopify()) return;
 
-        if (state.isInitialized || !checkEmbedded()) {
+        const sendReadyMessage = () => {
+            try {
+                window.parent.postMessage({
+                    type: 'iframe-ready-for-scroll-updates',
+                    source: 'IframeHeightManager',
+                    timestamp: performance.now()
+                }, '*');
+            } catch {
+                // Silent fail
+            }
+        };
+
+        // Staggered ready messages
+        const timeouts = [0, 50, 200].map(delay =>
+            setTimeout(sendReadyMessage, delay)
+        );
+
+        return () => {
+            timeouts.forEach(clearTimeout);
+        };
+    }, [isEmbeddedInShopify]);
+
+    // Main initialization (heavily optimized)
+    useEffect(() => {
+        if (typeof window === "undefined" || isInitializedRef.current || !isEmbeddedInShopify()) {
             return;
         }
 
-        state.isInitialized = true;
+        isInitializedRef.current = true;
 
-        // Staggered initial measurements with reduced delays
-        const initialDelays = [0, 8, 50, 150];
+        // Optimized initial measurements
+        const initialDelays = [0, 16, 100, 300];
         const timeoutIds = initialDelays.map((delay, index) =>
             setTimeout(() => debouncedHeightUpdate(index === 0, 'initial'), delay)
         );
 
-        // Capture refs at effect creation time
-        const timers = timersRef.current;
-        const observers = observersRef.current;
+        // Highly optimized ResizeObserver
+        if (window.ResizeObserver && !observerRef.current) {
+            observerRef.current = new ResizeObserver((entries) => {
+                // Only process if we have meaningful entries
+                let hasRelevantChange = false;
 
-        // Ultra-optimized ResizeObserver setup
-        if (window.ResizeObserver) {
-            const observer = new ResizeObserver((entries) => {
-                // Only process if content actually changed
-                const hasRelevantChange = entries.some(entry => entry.contentRect.height > 0);
+                for (const entry of entries) {
+                    const { contentRect } = entry;
+                    if (contentRect.height > 0) {
+                        hasRelevantChange = true;
+                        break;
+                    }
+                }
+
                 if (hasRelevantChange) {
                     throttledResizeUpdate();
                 }
             });
 
-            const targetElement = document.getElementById("main-content") || document.body;
-            observer.observe(targetElement);
-            observers.resize = observer;
+            const mainContent = document.getElementById("main-content");
+            const targetElement = mainContent || document.body;
+
+            if (targetElement) {
+                observerRef.current.observe(targetElement);
+            }
         }
 
-        // Ultra-optimized MutationObserver setup
-        const mutationObserver = new MutationObserver((mutations) => {
-            // Ultra-fast relevance check
-            const hasLayoutChange = mutations.some(mutation => {
-                if (mutation.type === 'childList') {
-                    return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
+        // Highly optimized MutationObserver
+        if (!mutationObserverRef.current) {
+            mutationObserverRef.current = new MutationObserver((mutations) => {
+                let hasLayoutChange = false;
+
+                for (const mutation of mutations) {
+                    if (mutation.type === 'childList') {
+                        // Check if added/removed nodes could affect layout
+                        const relevantNodes = Array.from(mutation.addedNodes).concat(Array.from(mutation.removedNodes));
+                        if (relevantNodes.some(node =>
+                            node.nodeType === Node.ELEMENT_NODE &&
+                            (node as HTMLElement).offsetHeight > 0
+                        )) {
+                            hasLayoutChange = true;
+                            break;
+                        }
+                    } else if (mutation.type === 'attributes') {
+                        const attr = mutation.attributeName;
+                        if (attr === 'style' || attr === 'class' || attr === 'height' || attr === 'hidden') {
+                            hasLayoutChange = true;
+                            break;
+                        }
+                    }
                 }
-                if (mutation.type === 'attributes') {
-                    const attr = mutation.attributeName;
-                    return attr === 'style' || attr === 'class' || attr === 'height' || attr === 'hidden';
+
+                if (hasLayoutChange) {
+                    throttledMutationUpdate();
                 }
-                return false;
             });
 
-            if (hasLayoutChange) {
-                throttledMutationUpdate();
-            }
-        });
+            mutationObserverRef.current.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ["style", "class", "height", "hidden"],
+                attributeOldValue: false,
+                characterData: false,
+            });
+        }
 
-        mutationObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ["style", "class", "height", "hidden"],
-            attributeOldValue: false,
-            characterData: false,
-        });
+        // Event listeners with optimized handlers
+        const handleLoad = () => {
+            setTimeout(() => debouncedHeightUpdate(true, 'load'), 16);
+        };
 
-        observers.mutation = mutationObserver;
+        const handleDOMContentLoaded = () => {
+            setTimeout(() => debouncedHeightUpdate(true, 'dom-ready'), 8);
+        };
 
-        // Optimized event listeners
-        const handleLoad = () => debouncedHeightUpdate(true, 'load');
-        const handleDOMReady = () => debouncedHeightUpdate(true, 'dom-ready');
-        const handleScroll = () => notifyToastOfChanges('scroll');
+        // Passive scroll listener (minimal impact)
+        const handleScroll = () => {
+            notifyToastOfChanges('scroll');
+        };
 
-        const options = { passive: true };
-        window.addEventListener("resize", throttledResizeUpdate, options);
-        window.addEventListener("load", handleLoad, options);
-        window.addEventListener("scroll", handleScroll, options);
-        document.addEventListener("DOMContentLoaded", handleDOMReady, options);
+        window.addEventListener("resize", throttledResizeUpdate, { passive: true });
+        window.addEventListener("load", handleLoad, { passive: true });
+        document.addEventListener("DOMContentLoaded", handleDOMContentLoaded, { passive: true });
+        window.addEventListener("scroll", handleScroll, { passive: true });
 
         return () => {
             // Comprehensive cleanup
             timeoutIds.forEach(clearTimeout);
-
-            // Clear all timers using captured refs
-            Object.values(timers).forEach(timer => {
-                if (typeof timer === 'number' && timer !== null) {
-                    cancelAnimationFrame(timer);
-                } else if (timer) {
-                    clearTimeout(timer);
-                }
+            [debounceTimerRef, mutationDebounceTimerRef, resizeDebounceTimerRef, notificationBatchTimerRef].forEach(ref => {
+                if (ref.current) clearTimeout(ref.current);
             });
+            if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
 
-            // Disconnect observers using captured refs
-            if (observers.resize) {
-                observers.resize.disconnect();
-                observers.resize = null;
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+                observerRef.current = null;
             }
-            if (observers.mutation) {
-                observers.mutation.disconnect();
-                observers.mutation = null;
+            if (mutationObserverRef.current) {
+                mutationObserverRef.current.disconnect();
+                mutationObserverRef.current = null;
             }
 
-            // Remove event listeners
             window.removeEventListener("resize", throttledResizeUpdate);
             window.removeEventListener("load", handleLoad);
             window.removeEventListener("scroll", handleScroll);
-            document.removeEventListener("DOMContentLoaded", handleDOMReady);
-
-            // Reset state
-            state.isInitialized = false;
+            document.removeEventListener("DOMContentLoaded", handleDOMContentLoaded);
+            isInitializedRef.current = false;
         };
-    }, [checkEmbedded, debouncedHeightUpdate, throttledMutationUpdate, throttledResizeUpdate, notifyToastOfChanges]);
+    }, [debouncedHeightUpdate, throttledMutationUpdate, throttledResizeUpdate, isEmbeddedInShopify, notifyToastOfChanges]);
 
     return null;
 }

@@ -1,4 +1,4 @@
-// src/components/ViewportToaster.tsx (Ultra-Performance Optimized)
+// src/components/ViewportToaster.tsx (Performance Optimized)
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -17,34 +17,24 @@ interface ParentViewportInfo {
     timestamp: number;
 }
 
-// Ultra-optimized constants
-const POSITION_UPDATE_THRESHOLD = 8; // Slightly larger threshold
-const POSITION_CACHE_DURATION = 32; // Longer cache duration
-const RAF_THROTTLE_MS = 16; // 60fps cap
+const POSITION_UPDATE_THRESHOLD = 10; // Only update position if change is >10px
+const DEBOUNCE_DELAY = 8; // Reduced debounce for smoother updates
+const POSITION_CACHE_DURATION = 16; // Cache position at 60fps
 
 export default function ViewportToaster() {
     const [isInIframe, setIsInIframe] = useState(false);
+    const [parentViewport, setParentViewport] = useState<ParentViewportInfo | null>(null);
     const [toasterOffset, setToasterOffset] = useState(16);
 
-    // Ultra-performance refs - consolidated with proper types
-    const stateRef = useRef({
-        lastPositionUpdate: 0,
-        cachedPosition: 16,
-        lastViewportData: null as ParentViewportInfo | null,
-        isCalculating: false,
-        lastRAF: 0,
-        messageQueue: [] as ParentViewportInfo[],
-        isProcessing: false
-    });
+    // Performance optimization refs
+    const lastPositionUpdateRef = useRef<number>(0);
+    const cachedPositionRef = useRef<number>(16);
+    const positionDebounceRef = useRef<NodeJS.Timeout | null>(null);
+    const lastViewportDataRef = useRef<ParentViewportInfo | null>(null);
+    const isCalculatingPositionRef = useRef<boolean>(false);
 
-    const timersRef = useRef({
-        raf: null as number | null,
-        debounce: null as number | null, // Changed from NodeJS.Timeout to number
-        batch: null as number | null
-    });
-
-    // Memoized iframe check (only runs once)
-    const checkIframe = useMemo(() => {
+    // Memoized iframe check
+    const checkIframe = useCallback(() => {
         try {
             return window.self !== window.top;
         } catch {
@@ -52,223 +42,171 @@ export default function ViewportToaster() {
         }
     }, []);
 
-    // Ultra-optimized position calculation with better caching
-    const calculateToasterPosition = useCallback((viewportData: ParentViewportInfo): number => {
-        const state = stateRef.current;
-        const now = performance.now();
+    useEffect(() => {
+        const inIframe = checkIframe();
+        setIsInIframe(inIframe);
 
-        // Enhanced cache check with fuzzy matching
+        // Single message to request scroll updates
+        if (inIframe) {
+            try {
+                window.parent.postMessage({
+                    type: 'request-scroll-updates',
+                    source: 'ViewportToaster',
+                    timestamp: performance.now()
+                }, '*');
+            } catch {
+                // Silent fail
+            }
+        }
+    }, [checkIframe]);
+
+    // Optimized position calculation with caching
+    const calculateToasterPosition = useCallback((viewportData: ParentViewportInfo): number => {
+        // Return cached position if data hasn't changed significantly
+        const now = performance.now();
         if (
-            state.lastViewportData &&
-            now - state.lastPositionUpdate < POSITION_CACHE_DURATION &&
-            Math.abs(viewportData.iframeTop - state.lastViewportData.iframeTop) < POSITION_UPDATE_THRESHOLD &&
-            Math.abs(viewportData.scrollTop - state.lastViewportData.scrollTop) < POSITION_UPDATE_THRESHOLD &&
-            Math.abs(viewportData.viewportHeight - state.lastViewportData.viewportHeight) < 10
+            lastViewportDataRef.current &&
+            now - lastPositionUpdateRef.current < POSITION_CACHE_DURATION &&
+            Math.abs(viewportData.iframeTop - lastViewportDataRef.current.iframeTop) < POSITION_UPDATE_THRESHOLD &&
+            Math.abs(viewportData.scrollTop - lastViewportDataRef.current.scrollTop) < POSITION_UPDATE_THRESHOLD
         ) {
-            return state.cachedPosition;
+            return cachedPositionRef.current;
         }
 
         const { viewportHeight, iframeTop, iframeHeight } = viewportData;
 
-        // Optimized visibility calculation
+        // Calculate visible portion of iframe
         const visibleTop = Math.max(0, -iframeTop);
         const visibleBottom = Math.min(iframeHeight, viewportHeight - iframeTop);
 
         let newPosition: number;
 
-        if (visibleBottom <= visibleTop) {
-            // Completely out of view - use default
+        if (visibleBottom <= 0 || visibleTop >= iframeHeight) {
+            // Iframe is completely out of view
             newPosition = 16;
         } else {
-            // Use faster integer math where possible
+            // Calculate center of visible portion
             const visibleHeight = visibleBottom - visibleTop;
-            const centerOfVisible = visibleTop + (visibleHeight >> 1); // Bit shift for division by 2
+            const centerOfVisible = visibleTop + (visibleHeight / 2);
 
-            // Simplified constraints
-            const maxOffset = Math.max(16, iframeHeight - 120);
-            newPosition = Math.max(16, Math.min(maxOffset, centerOfVisible - 60));
+            // Constraints for position
+            const minOffset = 16;
+            const maxOffset = Math.max(minOffset, iframeHeight - 120);
+
+            newPosition = Math.max(minOffset, Math.min(maxOffset, centerOfVisible - 60));
         }
 
-        // Update cache
-        state.cachedPosition = newPosition;
-        state.lastPositionUpdate = now;
-        state.lastViewportData = viewportData;
+        // Cache the calculation
+        cachedPositionRef.current = newPosition;
+        lastPositionUpdateRef.current = now;
+        lastViewportDataRef.current = viewportData;
 
         return newPosition;
     }, []);
 
-    // Ultra-batched position update with RAF throttling
+    // Debounced position update
     const updateToasterPosition = useCallback((viewportData: ParentViewportInfo) => {
-        const state = stateRef.current;
-        const timers = timersRef.current;
-        const now = performance.now();
+        if (isCalculatingPositionRef.current) return;
 
-        // RAF throttling - limit to 60fps
-        if (now - state.lastRAF < RAF_THROTTLE_MS) {
-            // Queue for next available frame
-            state.messageQueue.push(viewportData);
-            return;
+        if (positionDebounceRef.current) {
+            clearTimeout(positionDebounceRef.current);
         }
 
-        if (state.isCalculating || state.isProcessing) return;
+        positionDebounceRef.current = setTimeout(() => {
+            if (isCalculatingPositionRef.current) return;
 
-        // Cancel previous operations
-        if (timers.raf) cancelAnimationFrame(timers.raf);
-        if (timers.debounce) clearTimeout(timers.debounce);
-
-        timers.raf = requestAnimationFrame(() => {
-            if (state.isProcessing) return;
-
-            state.isProcessing = true;
-            state.lastRAF = performance.now();
+            isCalculatingPositionRef.current = true;
 
             try {
-                // Process latest message from queue or current
-                const latestData = state.messageQueue.length > 0
-                    ? state.messageQueue[state.messageQueue.length - 1]
-                    : viewportData;
+                const newOffset = calculateToasterPosition(viewportData);
 
-                state.messageQueue.length = 0; // Clear queue efficiently
-
-                const newOffset = calculateToasterPosition(latestData);
-
-                // Micro-optimization: use bitwise operation for threshold check
-                if ((newOffset - toasterOffset) ** 2 >= POSITION_UPDATE_THRESHOLD ** 2) {
+                // Only update if position changed significantly
+                if (Math.abs(newOffset - toasterOffset) >= POSITION_UPDATE_THRESHOLD) {
                     setToasterOffset(newOffset);
+                    setParentViewport(viewportData);
                 }
             } finally {
-                state.isProcessing = false;
-                timers.raf = null;
+                isCalculatingPositionRef.current = false;
             }
-        });
+        }, DEBOUNCE_DELAY);
     }, [calculateToasterPosition, toasterOffset]);
 
-    // Setup iframe detection and initial message (runs once)
-    useEffect(() => {
-        setIsInIframe(checkIframe);
-
-        if (checkIframe) {
-            // Single postMessage with error handling
-            const sendMessage = () => {
-                try {
-                    window.parent.postMessage({
-                        type: 'request-scroll-updates',
-                        source: 'ViewportToaster',
-                        timestamp: performance.now()
-                    }, '*');
-                } catch {
-                    // Silent fail - parent might not be accessible
-                }
-            };
-
-            // Send immediately and as backup after 50ms
-            sendMessage();
-            setTimeout(sendMessage, 50);
-        }
-    }, [checkIframe]);
-
-    // Ultra-optimized message handling with intelligent batching
+    // Optimized message handling with buffering
     useEffect(() => {
         if (!isInIframe) return;
 
-        // Capture timer ref at effect creation time
-        const timers = timersRef.current;
+        let messageBuffer: ParentViewportInfo | null = null;
+        let bufferTimer: NodeJS.Timeout | null = null;
 
-        // Message batching system
-        const messageBuffer = new Map<string, ParentViewportInfo>();
-
-        const processBatch = () => {
-            if (messageBuffer.size === 0) return;
-
-            // Process only the latest message of each type
-            const scrollInfo = messageBuffer.get('parent-scroll-info');
-            const resizeInfo = messageBuffer.get('parent-resize-info');
-
-            // Prioritize resize over scroll
-            const dataToProcess = resizeInfo || scrollInfo;
-
-            if (dataToProcess) {
-                updateToasterPosition(dataToProcess);
+        const processBufferedMessage = () => {
+            if (messageBuffer) {
+                updateToasterPosition(messageBuffer);
+                messageBuffer = null;
             }
-
-            messageBuffer.clear();
-            timers.batch = null;
         };
 
         const handleMessage = (event: MessageEvent) => {
-            const { data } = event;
+            if (event.data?.type === 'parent-scroll-info' || event.data?.type === 'parent-resize-info') {
+                const viewportData = event.data as ParentViewportInfo;
 
-            if (!data?.type || (data.type !== 'parent-scroll-info' && data.type !== 'parent-resize-info')) {
-                return;
-            }
+                // Buffer messages to prevent excessive updates
+                messageBuffer = viewportData;
 
-            // Buffer the message
-            messageBuffer.set(data.type, data as ParentViewportInfo);
+                if (bufferTimer) {
+                    clearTimeout(bufferTimer);
+                }
 
-            // Batch processing with RAF
-            if (!timers.batch) {
-                timers.batch = requestAnimationFrame(processBatch);
+                bufferTimer = setTimeout(processBufferedMessage, DEBOUNCE_DELAY);
             }
         };
 
-        // Use capture phase for better performance
-        window.addEventListener('message', handleMessage, { passive: true, capture: true });
+        window.addEventListener('message', handleMessage, { passive: true });
 
         return () => {
-            window.removeEventListener('message', handleMessage, true);
-            if (timers.batch) {
-                cancelAnimationFrame(timers.batch);
-                timers.batch = null;
+            window.removeEventListener('message', handleMessage);
+            if (bufferTimer) {
+                clearTimeout(bufferTimer);
             }
         };
     }, [isInIframe, updateToasterPosition]);
 
-    // Optimized custom event handling (consolidated)
+    // Optimized custom event handling
     useEffect(() => {
         if (!isInIframe) return;
 
-        const state = stateRef.current;
-
-        const handleViewportChange = (event: CustomEvent<ParentViewportInfo>) => {
+        const handleParentViewportChange = (event: CustomEvent<ParentViewportInfo>) => {
             updateToasterPosition(event.detail);
         };
 
-        const handleHeightChange = () => {
-            // Only recalculate if we have recent data
-            if (state.lastViewportData && performance.now() - state.lastPositionUpdate < 1000) {
-                updateToasterPosition(state.lastViewportData);
+        const handleIframeHeightChange = () => {
+            // Only recalculate if we have recent viewport data
+            if (parentViewport && performance.now() - lastPositionUpdateRef.current < 1000) {
+                updateToasterPosition(parentViewport);
             }
         };
 
-        const options = { passive: true };
-        window.addEventListener('parent-viewport-change', handleViewportChange as EventListener, options);
-        window.addEventListener('iframe-height-changed', handleHeightChange, options);
+        window.addEventListener('parent-viewport-change', handleParentViewportChange as EventListener, { passive: true });
+        window.addEventListener('iframe-height-changed', handleIframeHeightChange as EventListener, { passive: true });
 
         return () => {
-            window.removeEventListener('parent-viewport-change', handleViewportChange as EventListener);
-            window.removeEventListener('iframe-height-changed', handleHeightChange);
+            window.removeEventListener('parent-viewport-change', handleParentViewportChange as EventListener);
+            window.removeEventListener('iframe-height-changed', handleIframeHeightChange as EventListener);
         };
-    }, [isInIframe, updateToasterPosition]);
+    }, [isInIframe, parentViewport, updateToasterPosition]);
 
-    // Memoized styles with CSS custom properties for better performance
+    // Memoized CSS styles to prevent unnecessary re-renders
     const toasterStyles = useMemo(() => {
         if (!isInIframe) return '';
 
         return `
-            :root {
-                --toaster-offset: ${toasterOffset}px;
-                --toaster-transition: top 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-            }
-            
             [data-sonner-toaster] {
                 position: fixed !important;
-                top: var(--toaster-offset) !important;
+                top: ${toasterOffset}px !important;
                 left: 50% !important;
                 transform: translateX(-50%) !important;
                 z-index: 9999 !important;
                 pointer-events: auto !important;
-                transition: var(--toaster-transition) !important;
-                will-change: top !important;
+                transition: top 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
             }
             
             [data-sonner-toast] {
@@ -284,7 +222,7 @@ export default function ViewportToaster() {
         `;
     }, [isInIframe, toasterOffset]);
 
-    // Ultra-optimized style injection with change detection
+    // Optimized style injection
     useEffect(() => {
         if (!isInIframe) return;
 
@@ -296,21 +234,21 @@ export default function ViewportToaster() {
             document.head.appendChild(styleElement);
         }
 
-        // Micro-optimization: only update if content actually changed
+        // Only update if content changed
         if (styleElement.textContent !== toasterStyles) {
             styleElement.textContent = toasterStyles;
         }
 
-        // Return cleanup function that only runs on unmount
         return () => {
+            // Don't remove style element on every re-render, only on unmount
             const existingStyle = document.getElementById('iframe-toaster-fix');
-            if (existingStyle && existingStyle.parentNode) {
-                existingStyle.parentNode.removeChild(existingStyle);
+            if (existingStyle) {
+                existingStyle.remove();
             }
         };
     }, [isInIframe, toasterStyles]);
 
-    // Static toast options (never changes)
+    // Memoized toast options to prevent re-renders
     const toastOptions = useMemo(() => ({
         style: {
             padding: "16px",
@@ -322,23 +260,12 @@ export default function ViewportToaster() {
         duration: 4000,
     }), []);
 
-    // Comprehensive cleanup on unmount
+    // Cleanup on unmount
     useEffect(() => {
-        // Capture refs at effect creation time
-        const timers = timersRef.current;
-        const state = stateRef.current;
-
         return () => {
-            // Use the captured refs from effect creation time
-            // Clear all timers
-            if (timers.raf) cancelAnimationFrame(timers.raf);
-            if (timers.debounce) clearTimeout(timers.debounce);
-            if (timers.batch) cancelAnimationFrame(timers.batch);
-
-            // Clear state
-            state.messageQueue.length = 0;
-            state.isProcessing = false;
-            state.isCalculating = false;
+            if (positionDebounceRef.current) {
+                clearTimeout(positionDebounceRef.current);
+            }
         };
     }, []);
 
