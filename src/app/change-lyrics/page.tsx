@@ -398,6 +398,7 @@ function ChangeLyricsPageContent() {
     };
 
     const handleNextStep = async (e: React.FormEvent, path: string) => {
+        setIsLoading(true);
         e.preventDefault();
         const hasChanges = lyrics.some((line) =>
             line.wordChanges && line.wordChanges.some(change => change.hasChanged)
@@ -475,6 +476,7 @@ function ChangeLyricsPageContent() {
             setReplaceTerm('');
             setReplaceWith('');
         }, 100);
+        setIsLoading(false);
     }, [replaceTerm, replaceWith, setLyrics, setFormValues]);
 
     // Handle keyboard events
