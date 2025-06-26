@@ -1,9 +1,9 @@
-// src/app/review/page.tsx
+// src/app/review-sample/page.tsx
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, PackageCheck, ShoppingCart } from 'lucide-react';
+import { ChevronRight, ShoppingCart, Download, ExternalLink } from 'lucide-react';
 import React from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Separator from "@radix-ui/react-separator";
@@ -11,18 +11,7 @@ import { toast } from "sonner";
 import { StepIndicator, StepDivider, type StepProps } from "@/components/layouts/StepNavigation";
 import BackButton from "@/components/BackButton";
 import Image from "next/image";
-import { getDistinctChangedWords } from '../change-lyrics/utils'; // Import getDistinctChangedWords
-
-// Type definitions
-type ProductOption = {
-    id: string;
-    title: string;
-    description: string;
-    price: number;
-    originalPrice?: number;
-    isSelected: boolean;
-    type: "delivery" | "addon";
-};
+import { stripHtmlAndSymbols, getDistinctChangedWords } from '../change-lyrics/utils'; // Import getDistinctChangedWords
 
 interface WordChange {
     originalWord: string;
@@ -45,35 +34,6 @@ export type LyricLine = {
     wordChanges: WordChange[];
 };
 
-interface CheckoutButtonProps {
-    handleCheckout: () => void;
-    isLoading: boolean;
-    calculateTotal: () => number;
-}
-
-const CheckoutButton: React.FC<CheckoutButtonProps> = ({ handleCheckout, isLoading, calculateTotal }) => {
-    return (
-        <button
-            onClick={handleCheckout}
-            disabled={isLoading}
-            className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
-            type="button"
-        >
-            <PackageCheck />
-            {isLoading ? (
-                "Processing..."
-            ) : (
-                <>
-                    Checkout{" "}
-                    <span className="font-bold text-lg">
-                        US${calculateTotal().toFixed(2)}
-                    </span>
-                </>
-            )}
-            <ChevronRight className="-mr-1 size-4 md:size-5" />
-        </button>
-    );
-};
 
 function OrderReviewPageContent() {
     const router = useRouter();
@@ -86,25 +46,8 @@ function OrderReviewPageContent() {
     const [lyricsData, setLyricsData] = useState<LyricLine[]>([]);
     const [cost, setCost] = useState(0);
     const [specialRequests, setSpecialRequests] = useState("");
-    const [productOptions, setProductOptions] = useState<ProductOption[]>([
-        {
-            id: "delivery-standard",
-            title: "Standard Delivery",
-            description: "2-7 business days",
-            price: 0,
-            isSelected: true,
-            type: "delivery",
-        },
-        {
-            id: "delivery-rush",
-            title: "Rush Delivery",
-            description: "1 business day",
-            price: 15,
-            originalPrice: 20,
-            isSelected: false,
-            type: "delivery",
-        },
-    ]);
+
+    const [hasDownloaded, setHasDownloaded] = useState(false);
 
     // Memoize processed lyrics from lyricsData
     const lyrics = useMemo(() => {
@@ -156,39 +99,126 @@ function OrderReviewPageContent() {
         }
     }, []);
 
-    const toggleProductSelection = (productId: string) => {
-        setProductOptions((prevOptions) => {
-            const updatedOptions = [...prevOptions];
-            const productIndex = updatedOptions.findIndex((p) => p.id === productId);
-            if (productIndex === -1) return prevOptions;
+    const generateDownloadContent = (): string => {
+        // Generate original lyrics text for reference
+        const originalLyricsText = lyricsData.map(line => line.original).join('\n');
 
-            const product = updatedOptions[productIndex];
-            if (product.type === "delivery") {
-                updatedOptions.forEach((p, i) => {
-                    if (p.type === "delivery") {
-                        updatedOptions[i] = { ...p, isSelected: false };
-                    }
-                });
+        // Generate modified lyrics text using stripHtmlAndSymbols
+        const modifiedLyricsText = lyricsData.map(line => {
+            if (line.markedText && line.markedText !== line.modified) {
+                return stripHtmlAndSymbols(line.markedText);
             }
+            return line.modified;
+        }).join('\n');
 
-            updatedOptions[productIndex] = { ...product, isSelected: !product.isSelected };
-            return updatedOptions;
-        });
+        // Generate line-by-line changes
+        const lineChanges = lyricsData
+            .map((line, index) => {
+                const hasChanges = line.wordChanges && line.wordChanges.some(change => change.hasChanged);
+                if (hasChanges) {
+                    const processedModified = line.markedText ? stripHtmlAndSymbols(line.markedText) : line.modified;
+                    return `Line ${index + 1}: "${line.original}" -> "${processedModified}"`;
+                }
+                return null;
+            })
+            .filter(Boolean)
+            .join('\n');
+
+        const content = [
+            `/*******************************************************************`,
+            ` *                                                                 *`,
+            ` *  WARNING:  This file is auto-generated, do not edit it because  *`,
+            ` *  that would make the file unusable and you may have to start    *`,
+            ` *  the order process all over again.                              *`,
+            ` *                                                                 *`,
+            ` *******************************************************************/`,
+            ``,
+            `/*******************************************************************`,
+            ` *                                                                 *`,
+            ` *  USAGE: To continue with your order, go to                      *`,
+            ` *  "https://nicevois.com/products/change-song-lyrics" and select  *`,
+            ` *  the "Load Checkout" tab.                                       *`,
+            ` *                                                                 *`,
+            ` *******************************************************************/`,
+            ``,
+            `NICEVOIS SONG MODIFICATION PROGRESS`,
+            `Generated on: ${new Date().toLocaleString('en-GB', { timeZone: 'UTC' })} (GMT+0)`,
+            ``,
+            `SONG INFORMATION:`,
+            `Title: ${songTitle || 'N/A'}`,
+            `Artist: ${songArtist || 'N/A'}`,
+            `Image URL: ${songImage || 'N/A'}`,
+            `URL: ${songUrl || 'N/A'}`,
+            ``,
+            `LYRICS CHANGES (${distinctChangedWords.length} words modified):`,
+            `Changed Words: ${distinctChangedWords.join(', ')}`,
+            ``,
+            `LINE-BY-LINE CHANGES:`,
+            lineChanges || 'No changes detected',
+            ``,
+            `ORIGINAL LYRICS:`,
+            originalLyricsText,
+            ``,
+            `MODIFIED LYRICS:`,
+            modifiedLyricsText,
+            ``,
+            `SPECIAL REQUESTS:`,
+            specialRequests || 'None',
+            ``,
+            `END`,
+            ``
+        ];
+
+        return content.join('\n');
     };
 
-    const calculateTotal = (): number => {
-        const deliveryCost = productOptions
-            .filter((product) => product.isSelected)
-            .reduce((total, product) => total + product.price, 0);
-        return cost + deliveryCost;
+    function safeForFilename(
+        str: string | null | undefined,
+        fallback: string
+    ): string {
+        // Use lowercase `string` type, not `String` object type.
+        const candidate = str?.trim() ?? "";
+        const base = candidate.length > 0 ? candidate : fallback;
+        // Replace anything not A-Z, a-z, 0-9 with underscore.
+        return base.replace(/[^a-zA-Z0-9]/g, "_");
+    }
+
+    const handleDownload = () => {
+        const content = generateDownloadContent();
+        const timestampUTC = new Date()
+            .toISOString()
+            .slice(0, 19)
+            .replace(/:/g, '-');
+
+        const filename = `nicevois_${safeForFilename(songTitle, 'song')}_${safeForFilename(songArtist, 'artist')}_${timestampUTC}.txt`;
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setHasDownloaded(true);
     };
 
-    const handleCheckout = async () => {
+    const handleSampleRequest = async () => {
+        if (!hasDownloaded) {
+            toast.error("Download required", {
+                description: "Please download the checkout progress file first before requesting a sample."
+            });
+            return;
+        }
+
         setIsLoading(true);
 
+        // Same validation as handleCheckout
         if (distinctChangedWords.length < 1) {
             toast.error("No significant changes detected", {
-                description: "You must modify at least one word to proceed with checkout.",
+                description: "You must modify at least one word to proceed with sample request.",
             });
             setIsLoading(false);
             return;
@@ -196,7 +226,7 @@ function OrderReviewPageContent() {
 
         if (lyrics.filter(line => line.modified !== line.original).length === 0) {
             toast.error("No lyrics changes detected", {
-                description: "You need to modify at least one line of lyrics to place an order.",
+                description: "You need to modify at least one line of lyrics to request a sample.",
             });
             setIsLoading(false);
             return;
@@ -204,22 +234,7 @@ function OrderReviewPageContent() {
 
         if (!songTitle && !songArtist && !songUrl) {
             toast.error("Missing song information", {
-                description: "Please go back and select a song before checkout.",
-            });
-            setIsLoading(false);
-            return;
-        }
-
-        // Add special requests validation
-        const MAX_WORDS = 100;
-        const countWords = (text: string): number => {
-            return text ? text.trim().split(/\s+/).filter(word => word.length > 0).length : 0;
-        };
-        const specialRequestsWordCount = specialRequests ? countWords(specialRequests) : 0;
-
-        if (specialRequests && specialRequestsWordCount > MAX_WORDS) {
-            toast.error("Special Request is too long", {
-                description: `Please limit your 'Special Request' to ${MAX_WORDS} words (currently ${specialRequestsWordCount} words).`,
+                description: "Please go back and select a song before requesting a sample.",
             });
             setIsLoading(false);
             return;
@@ -229,8 +244,6 @@ function OrderReviewPageContent() {
             const sessionId = localStorage.getItem("sessionId") || Math.random().toString(36).substring(2, 15);
             localStorage.setItem("sessionId", sessionId);
 
-            const deliveryType = productOptions.find((p) => p.isSelected && p.type === "delivery")?.id === "delivery-rush" ? "rush" : "standard";
-
             const lyricsChanges = lyrics
                 .filter(line => line.modified !== line.original)
                 .map(line => ({
@@ -239,24 +252,24 @@ function OrderReviewPageContent() {
                     modified: line.modified,
                 }));
 
-            const orderData = {
+            const sampleOrderData = {
                 sessionId,
-                price: calculateTotal(),
+                price: 2.00,
                 numWordChanged: distinctChangedWords.length,
                 wordChanged: distinctChangedWords,
                 songName: songTitle || undefined,
                 artist: songArtist || undefined,
                 songImage: songImage || undefined,
                 songUrl: songUrl || undefined,
-                deliveryType,
                 lyrics: lyricsChanges,
-                specialRequests: specialRequests
+                specialRequests: specialRequests,
+                isSample: true
             };
 
-            const response = await fetch("/api/shopify", {
+            const response = await fetch("/api/shopify/request-sample", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(orderData),
+                body: JSON.stringify(sampleOrderData),
             });
 
             if (response.ok) {
@@ -273,8 +286,8 @@ function OrderReviewPageContent() {
                     }
                     return;
                 } else {
-                    const userMessage = result.userMessage || "Failed to create order";
-                    toast.error("Checkout error", { description: userMessage });
+                    const userMessage = result.userMessage || "Failed to create sample request";
+                    toast.error("Sample request error", { description: userMessage });
                     throw new Error(userMessage);
                 }
             } else {
@@ -284,9 +297,9 @@ function OrderReviewPageContent() {
                 throw new Error(errorMessage);
             }
         } catch (error) {
-            console.error("Checkout error:", error);
-            toast.error("Checkout failed", {
-                description: `There was a problem processing your order: ${error instanceof Error ? error.message : String(error)}`,
+            console.error("Sample request error:", error);
+            toast.error("Sample request failed", {
+                description: `There was a problem processing your sample request: ${error instanceof Error ? error.message : String(error)}`,
             });
         } finally {
             setIsLoading(false);
@@ -343,7 +356,7 @@ function OrderReviewPageContent() {
 
                         <Tabs.Content value={`step-${currentStep}`} className="flex flex-1 flex-col space-y-2" style={{ opacity: 1 }}>
                             <h3 className="scroll-m-20 font-azbuka tracking-normal dark:text-white my-2 text-[22px] md:my-4 md:text-[28px] text-white duration-150 ease-in animate-in fade-in">
-                                Review Your Order
+                                Request A Sample
                             </h3>
 
                             {/* Song Image, Title, and Artist Display */}
@@ -386,7 +399,6 @@ function OrderReviewPageContent() {
                             {!isLoading && (
                                 <div className="flex flex-row items-center gap-2 py-0">
                                     <BackButton href="/change-lyrics" />
-                                    <CheckoutButton handleCheckout={handleCheckout} isLoading={isLoading} calculateTotal={calculateTotal} />
                                 </div>
                             )}
 
@@ -399,7 +411,7 @@ function OrderReviewPageContent() {
                                 <div className="p-4 flex">
                                     <ShoppingCart className="w-6 h-6 text-white mr-3 ml-1" />
                                     <p className="font-medium text-white md:block">
-                                        Total: <span className="font-bold text-xl">US${calculateTotal().toFixed(2)}</span>
+                                        Total: <span className="font-bold text-xl">US${cost.toFixed(2)}</span>
                                     </p>
                                 </div>
                             </div>
@@ -462,49 +474,75 @@ function OrderReviewPageContent() {
                                     )}
 
 
-                                    {/* Delivery Options */}
-                                    <div className="space-y-2" style={{ marginBottom: '1.25rem', marginTop: '0.75rem' }}>
-                                        {productOptions
-                                            .filter((product) => product.type === "delivery")
-                                            .map((product) => (
-                                                <label
-                                                    key={product.id}
-                                                    className={`mb-1 scroll-m-20 text-sm font-normal leading-normal tracking-normal peer-disabled:cursor-not-allowed peer-disabled:text-gray-500 peer-disabled:opacity-50 dark:text-white flex cursor-pointer items-center justify-between rounded-lg ${product.isSelected ? "border-2 border-primary" : "border"} bg-white p-4 hover:border-primary`}
-                                                >
-                                                    <div className="flex items-start gap-2 pr-2">
-                                                        <button
-                                                            type="button"
-                                                            role="checkbox"
-                                                            aria-checked={product.isSelected}
-                                                            data-state={product.isSelected ? "checked" : "unchecked"}
-                                                            value="on"
-                                                            className="peer size-5 shrink-0 rounded-md border border-component-input bg-foundation shadow-md shadow-black/10 focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-foundation disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:bg-foundation-secondary"
-                                                            id={product.id}
-                                                            onClick={() => toggleProductSelection(product.id)}
-                                                        >
-                                                            {product.isSelected && (
-                                                                <span data-state="checked" className="flex items-center justify-center text-current" style={{ pointerEvents: "none" }}>
-                                                                    <Check className="size-5" />
-                                                                </span>
-                                                            )}
-                                                        </button>
-                                                        <div className="ml-1 space-y-0.5">
-                                                            <span className="relative -top-0.5 font-medium text-blue-800 text-lg">{product.title}</span>
-                                                            <p className="text-sm text-gray-500">{product.description}</p>
-                                                        </div>
-                                                    </div>
-                                                    {product.originalPrice !== undefined && (
-                                                        <div className="flex gap-2 md:items-center">
-                                                            <span className="font-bold text-gray-700">+US${product.price.toFixed(2)}</span>
-                                                            <span className="font-bold text-gray-400 line-through">
-                                                                US${product.originalPrice?.toFixed(2) ?? "0.00"}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </label>
-                                            ))}
-                                    </div>
+                                    {/* Request Sample */}
+                                    <div className="border overflow-hidden rounded-sm bg-white/90" style={{ marginBottom: '1.25rem', marginTop: '0.75rem' }} >
+                                        <div
+                                            className="w-full p-4 flex items-center justify-between text-left transition-colors"
+                                        >
+                                            <span className="font-medium text-gray-500">Request Sample</span>
+                                        </div>
 
+
+                                        <div className="p-4 border-t bg-gray-50">
+                                            <div className="space-y-6">
+                                                <p className="text-gray-700 leading-relaxed">
+                                                    Not sure if the new lyric changes will meet your expectation? Request a 10–15 second sample audio preview for just US$2!
+                                                </p>
+
+                                                <div className="bg-yellow-50 border border-yellow-400 rounded-md p-4 leading-8">
+                                                    <p className="text-gray-700 mb-2">
+                                                        <strong>Important Notes:</strong>
+                                                    </p>
+                                                    <ul className="text-gray-700 space-y-1 list-disc list-inside">
+                                                        <li>We will email you a 10-15 second preview based on the segment that best showcase the final lyric changes, within 2 days.</li>
+                                                        <li>This US$2 fee is for the <span className="italic">Request Sample</span> service only and does <span className="text-red-600">not</span> apply toward your full song modification order.</li>
+                                                        <li><span className="italic">Request Sample</span> is one-time purchase and is <span className="text-red-600">not</span> eligible for refund. Only a full song modification order is eligible for refund. For more details, please visit our <a href="https://nicevois.com/pages/refund-policy" className="text-blue-600 hover:text-blue-700 w-fit hover:underline inline-block" target="_blank" rel="noopener noreferrer" >
+                                                            Refund Policy page
+                                                            <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
+                                                        </a>.
+                                                        </li>
+                                                        <li>To learn how <span className="italic">Request Sample</span> works, please visit <a href="https://nicevois.com/pages/how-to-request-sample-audio" className="text-blue-600 hover:text-blue-700 w-fit hover:underline inline-block" target="_blank" rel="noopener noreferrer" >
+                                                            How to request sample audio
+                                                            <ExternalLink className="w-3 h-3 ml-1 color-inherit inline" />
+                                                        </a>.
+                                                        </li>
+                                                    </ul>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    {!hasDownloaded && (
+                                                        <p className="text-center text-sm">Please <span className="italic">Download Checkout Progress (.txt)</span> file first before <span className="italic">Request Sample</span>.</p>
+                                                    )}
+                                                    <button
+                                                        onClick={handleDownload}
+                                                        className="w-full flex items-center justify-center gap-2 p-4 my-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors border border-gray-200"
+                                                    >
+                                                        <Download className="size-4" />
+                                                        Download Checkout Progress (.txt)
+                                                        {hasDownloaded && <span className="text-green-600 text-sm">(Downloaded ✓)</span>}
+                                                    </button>
+
+                                                    <button
+                                                        onClick={handleSampleRequest}
+                                                        disabled={isLoading}
+                                                        className={`w-full flex items-center justify-center gap-2 p-4 my-2 rounded-md transition-colors bg-blue-600 text-white ${hasDownloaded
+                                                            ? 'hover:bg-blue-700'
+                                                            : 'opacity-30 cursor-not-allowed'
+                                                            }`}
+                                                    >
+                                                        {isLoading ? (
+                                                            "Processing..."
+                                                        ) : (
+                                                            <>
+                                                                Request Sample US$2.00
+                                                                <ChevronRight className="size-4" />
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                             <Separator.Root
@@ -515,7 +553,6 @@ function OrderReviewPageContent() {
                             {!isLoading && (
                                 <div className="flex flex-row items-center gap-2 py-0">
                                     <BackButton href="/change-lyrics" />
-                                    <CheckoutButton handleCheckout={handleCheckout} isLoading={isLoading} calculateTotal={calculateTotal} />
                                 </div>
                             )}
                         </Tabs.Content>

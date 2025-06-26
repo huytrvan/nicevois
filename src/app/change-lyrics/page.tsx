@@ -4,7 +4,7 @@
 import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
-import { ChevronRight, ListMusic, ArrowRight, Eraser, ExternalLink, ArrowLeft } from 'lucide-react';
+import { ChevronRight, ListMusic, ArrowRight, Eraser, ExternalLink, ArrowLeft, AudioLines } from 'lucide-react';
 import React from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Form from '@radix-ui/react-form';
@@ -397,7 +397,7 @@ function ChangeLyricsPageContent() {
         return { isValid, errors }; // Return both the validity and the errors object
     };
 
-    const handleNextStep = async (e: React.FormEvent) => {
+    const handleNextStep = async (e: React.FormEvent, path: string) => {
         e.preventDefault();
         const hasChanges = lyrics.some((line) =>
             line.wordChanges && line.wordChanges.some(change => change.hasChanged)
@@ -446,7 +446,7 @@ function ChangeLyricsPageContent() {
             if (songUrl) localStorage.setItem('songUrl', songUrl);
 
             setCurrentStep(currentStep + 1);
-            router.push("/review");
+            router.push(path);
 
         } catch (err) {
             console.error('Error during next step:', err);
@@ -512,21 +512,31 @@ function ChangeLyricsPageContent() {
         <div className="flex flex-row items-center gap-2 py-0">
             <BackButton href="/" />
             {!isError && (
-                <button
-                    onClick={handleNextStep}
-                    disabled={isLoading}
-                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md ml-auto text-sm md:text-base h-10 md:h-12"
-                    type="button"
-                >
-                    {isLoading ? (
-                        "Processing..."
-                    ) : (
-                        <>
-                            Review Order <span className="font-bold text-lg">US${cost}</span>
-                            <ChevronRight className="-mr-1 size-4 md:size-5" />
-                        </>
-                    )}
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                    <button
+                        disabled={isLoading}
+                        onClick={(e) => handleNextStep(e, '/review-sample')}
+                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 text-primary bg-primary text-white opacity-80 hover:opacity-90 hover:ring-blue-900/50 focus-visible:ring focus-visible:ring-blue-900/50 active:opacity-90 active:ring-0 px-2 rounded-md text-sm md:text-base h-10 md:h-12 mr-1"
+                    >
+                        <AudioLines className="-ml-1 size-4 md:size-5 -mt-[0.05rem]" />
+                        View Sample
+                    </button>
+                    <button
+                        onClick={(e) => handleNextStep(e, '/review')}
+                        disabled={isLoading}
+                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md text-sm md:text-base h-10 md:h-12"
+                        type="button"
+                    >
+                        {isLoading ? (
+                            "Processing..."
+                        ) : (
+                            <>
+                                Review Order <span className="font-bold text-lg">US${cost}</span>
+                                <ChevronRight className="-mr-1 size-4 md:size-5" />
+                            </>
+                        )}
+                    </button>
+                </div>
             )}
         </div>
     );
@@ -706,7 +716,7 @@ function ChangeLyricsPageContent() {
 
                             {/* Lyrics editor */}
                             {!isLoading && (
-                                <Form.Root className="flex flex-1 flex-col gap-4 pt-2 pb-4" onSubmit={handleNextStep}>
+                                <Form.Root className="flex flex-1 flex-col gap-4 pt-2 pb-4" onSubmit={(e) => handleNextStep(e, '/review')}>
                                     <div className="mt-2 overflow-y-auto max-h-[85vh]">
                                         <div className="relative w-full overflow-visible">
                                             <table className="caption-bottom text-sm relative h-10 w-full text-clip">
