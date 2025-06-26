@@ -299,7 +299,7 @@ const SearchPanel = () => {
         disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none 
         [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground 
         hover:bg-primary/90 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 
-        active:bg-primary/75 active:ring-0 h-10 px-5 rounded-md ml-auto text-sm md:text-base"
+        active:bg-primary/75 active:ring-0 h-10 md:h-12 px-5 rounded-md ml-auto text-sm md:text-base shadow"
                         type="submit"
                         disabled={isButtonLoading}
                         onClick={(e) => {
