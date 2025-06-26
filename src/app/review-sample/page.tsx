@@ -35,7 +35,7 @@ export type LyricLine = {
 };
 
 
-function OrderReviewPageContent() {
+function OrderReviewSamplePageContent() {
     const router = useRouter();
     const [songTitle, setSongTitle] = useState("");
     const [songArtist, setSongArtist] = useState("");
@@ -325,7 +325,7 @@ function OrderReviewPageContent() {
                     <Tabs.Root
                         value={`step-${currentStep}`}
                         className="flex flex-col space-y-4 md:space-y-6"
-                        onValueChange={(value) => {
+                        onValueChange={(value: string) => {
                             const step = parseInt(value.split("-")[1]);
                             if (step <= currentStep) {
                                 setCurrentStep(step);
@@ -370,7 +370,7 @@ function OrderReviewPageContent() {
                                                 layout="fill"
                                                 objectFit="cover"
                                                 className="rounded-lg"
-                                                onError={(e) => {
+                                                onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                                                     // When error occurs, find and remove the parent container
                                                     const container = document.getElementById('song-image-container');
                                                     if (container) {
@@ -563,7 +563,7 @@ function OrderReviewPageContent() {
     );
 }
 
-export default function ReviewPage() {
+export default function ReviewSamplePage() {
     return (
         <Suspense
             fallback={
@@ -572,7 +572,7 @@ export default function ReviewPage() {
                 </div>
             }
         >
-            <OrderReviewPageContent />
+            <OrderReviewSamplePageContent />
         </Suspense>
     );
 }

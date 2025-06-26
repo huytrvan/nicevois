@@ -870,16 +870,16 @@ export const handleResetLine = (
 };
 // A snippet from src/app/change-lyrics/utils.ts
 export const reconstructLyricsFromCheckout = (originalLyricsText: string, checkoutData: CheckoutData): LyricLine[] => {
-    console.log('=== RECONSTRUCT LYRICS DEBUG ===');
-    console.log('Original lyrics length:', originalLyricsText.length);
-    console.log('Modified lyrics length:', checkoutData.modifiedLyrics.length);
-    console.log('Changed words:', checkoutData.changedWords);
+    // console.log('=== RECONSTRUCT LYRICS DEBUG ===');
+    // console.log('Original lyrics length:', originalLyricsText.length);
+    // console.log('Modified lyrics length:', checkoutData.modifiedLyrics.length);
+    // console.log('Changed words:', checkoutData.changedWords);
 
     const originalLines = originalLyricsText.split('\n');
     const modifiedLines = checkoutData.modifiedLyrics.split('\n');
 
-    console.log('Original lines count:', originalLines.length);
-    console.log('Modified lines count:', modifiedLines.length);
+    // console.log('Original lines count:', originalLines.length);
+    // console.log('Modified lines count:', modifiedLines.length);
 
     const reconstructedLyrics: LyricLine[] = [];
     const maxLines = Math.max(originalLines.length, modifiedLines.length);
@@ -903,8 +903,8 @@ export const reconstructLyricsFromCheckout = (originalLyricsText: string, checko
         });
     }
 
-    console.log('Reconstructed lyrics sample:', reconstructedLyrics.slice(0, 3));
-    console.log('=== END RECONSTRUCT LYRICS DEBUG ===');
+    // console.log('Reconstructed lyrics sample:', reconstructedLyrics.slice(0, 3));
+    // console.log('=== END RECONSTRUCT LYRICS DEBUG ===');
 
     return reconstructedLyrics;
 };

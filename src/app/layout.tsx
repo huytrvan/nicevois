@@ -1,8 +1,8 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
-import IframeHeightManager from "../components/IframeHeightManager";
-import ViewportToaster from "../components/ViewportToaster";
+import IframeHeightManager from "@/components/IframeHeightManager";
+import ViewportToaster from "@/components/ViewportToaster";
 
 export const metadata: Metadata = {
     title: "Create Next App",

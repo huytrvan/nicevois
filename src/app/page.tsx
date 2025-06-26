@@ -681,7 +681,7 @@ const LoadCheckoutPanel = () => {
                                         alt={checkoutData.title}
                                         fill
                                         className="rounded-md object-cover"
-                                        onError={(e) => {
+                                        onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                                             // Hide image on error
                                             const target = e.target as HTMLImageElement;
                                             target.style.display = 'none';
