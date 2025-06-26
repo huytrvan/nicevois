@@ -260,7 +260,7 @@ export default function ViewportToaster() {
     return (
         <Toaster
             position="top-center"
-            // expand={true}
+            expand={true}
             richColors
             // closeButton
             toastOptions={toastOptions}
