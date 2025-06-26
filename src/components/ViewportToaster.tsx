@@ -1,7 +1,7 @@
-// src\components\ViewportToaster.tsx
+// src/components/ViewportToaster.tsx (Performance Optimized)
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Toaster } from 'sonner';
 
 interface ParentViewportInfo {
@@ -17,123 +17,188 @@ interface ParentViewportInfo {
     timestamp: number;
 }
 
+const POSITION_UPDATE_THRESHOLD = 10; // Only update position if change is >10px
+const DEBOUNCE_DELAY = 8; // Reduced debounce for smoother updates
+const POSITION_CACHE_DURATION = 32; // Cache position calculations for 32ms
+
 export default function ViewportToaster() {
     const [isInIframe, setIsInIframe] = useState(false);
     const [parentViewport, setParentViewport] = useState<ParentViewportInfo | null>(null);
-    const [toasterOffset, setToasterOffset] = useState(16); // Default top offset
+    const [toasterOffset, setToasterOffset] = useState(16);
+
+    // Performance optimization refs
+    const lastPositionUpdateRef = useRef<number>(0);
+    const cachedPositionRef = useRef<number>(16);
+    const positionDebounceRef = useRef<NodeJS.Timeout | null>(null);
+    const lastViewportDataRef = useRef<ParentViewportInfo | null>(null);
+    const isCalculatingPositionRef = useRef<boolean>(false);
+
+    // Memoized iframe check
+    const checkIframe = useCallback(() => {
+        try {
+            return window.self !== window.top;
+        } catch {
+            return true;
+        }
+    }, []);
 
     useEffect(() => {
-        // Check if we're in an iframe
-        const checkIframe = () => {
-            try {
-                return window.self !== window.top;
-            } catch {
-                return true;
-            }
-        };
-
         const inIframe = checkIframe();
         setIsInIframe(inIframe);
 
-        // Request scroll updates from parent if we're in iframe
+        // Single message to request scroll updates
         if (inIframe) {
             try {
                 window.parent.postMessage({
                     type: 'request-scroll-updates',
-                    source: 'ViewportToaster'
+                    source: 'ViewportToaster',
+                    timestamp: performance.now()
                 }, '*');
             } catch {
-                console.warn('Failed to request scroll updates from parent');
+                // Silent fail
             }
         }
-    }, []);
+    }, [checkIframe]);
 
-    const calculateToasterPosition = useCallback((viewportData: ParentViewportInfo) => {
+    // Optimized position calculation with caching
+    const calculateToasterPosition = useCallback((viewportData: ParentViewportInfo): number => {
+        // Return cached position if data hasn't changed significantly
+        const now = performance.now();
+        if (
+            lastViewportDataRef.current &&
+            now - lastPositionUpdateRef.current < POSITION_CACHE_DURATION &&
+            Math.abs(viewportData.iframeTop - lastViewportDataRef.current.iframeTop) < POSITION_UPDATE_THRESHOLD &&
+            Math.abs(viewportData.scrollTop - lastViewportDataRef.current.scrollTop) < POSITION_UPDATE_THRESHOLD
+        ) {
+            return cachedPositionRef.current;
+        }
+
         const { viewportHeight, iframeTop, iframeHeight } = viewportData;
 
-        // Calculate how much of the iframe is visible in the parent viewport
+        // Calculate visible portion of iframe
         const visibleTop = Math.max(0, -iframeTop);
         const visibleBottom = Math.min(iframeHeight, viewportHeight - iframeTop);
 
-        // If iframe is completely out of view, position at top of iframe
+        let newPosition: number;
+
         if (visibleBottom <= 0 || visibleTop >= iframeHeight) {
-            return 16;
+            // Iframe is completely out of view
+            newPosition = 16;
+        } else {
+            // Calculate center of visible portion
+            const visibleHeight = visibleBottom - visibleTop;
+            const centerOfVisible = visibleTop + (visibleHeight / 2);
+
+            // Constraints for position
+            const minOffset = 16;
+            const maxOffset = Math.max(minOffset, iframeHeight - 120);
+
+            newPosition = Math.max(minOffset, Math.min(maxOffset, centerOfVisible - 60));
         }
 
-        // Calculate the center of the visible portion
-        const visibleHeight = visibleBottom - visibleTop;
-        const centerOfVisible = visibleTop + (visibleHeight / 2);
+        // Cache the calculation
+        cachedPositionRef.current = newPosition;
+        lastPositionUpdateRef.current = now;
+        lastViewportDataRef.current = viewportData;
 
-        // Ensure minimum distance from edges
-        const minOffset = 16;
-        const maxOffset = iframeHeight - 100; // Leave space for toast height
-
-        return Math.max(minOffset, Math.min(maxOffset, centerOfVisible - 50)); // -50 to account for toast height
+        return newPosition;
     }, []);
 
-    // Listen for direct postMessage events from parent
+    // Debounced position update
+    const updateToasterPosition = useCallback((viewportData: ParentViewportInfo) => {
+        if (isCalculatingPositionRef.current) return;
+
+        if (positionDebounceRef.current) {
+            clearTimeout(positionDebounceRef.current);
+        }
+
+        positionDebounceRef.current = setTimeout(() => {
+            if (isCalculatingPositionRef.current) return;
+
+            isCalculatingPositionRef.current = true;
+
+            try {
+                const newOffset = calculateToasterPosition(viewportData);
+
+                // Only update if position changed significantly
+                if (Math.abs(newOffset - toasterOffset) >= POSITION_UPDATE_THRESHOLD) {
+                    setToasterOffset(newOffset);
+                    setParentViewport(viewportData);
+                }
+            } finally {
+                isCalculatingPositionRef.current = false;
+            }
+        }, DEBOUNCE_DELAY);
+    }, [calculateToasterPosition, toasterOffset]);
+
+    // Optimized message handling with buffering
     useEffect(() => {
         if (!isInIframe) return;
 
-        const handleMessage = (event: MessageEvent) => {
-            // Handle parent viewport messages directly
-            if (event.data?.type === 'parent-scroll-info' || event.data?.type === 'parent-resize-info') {
-                const viewportData = event.data as ParentViewportInfo;
-                setParentViewport(viewportData);
+        let messageBuffer: ParentViewportInfo | null = null;
+        let bufferTimer: NodeJS.Timeout | null = null;
 
-                // Calculate new toaster position
-                const newOffset = calculateToasterPosition(viewportData);
-                setToasterOffset(newOffset);
+        const processBufferedMessage = () => {
+            if (messageBuffer) {
+                updateToasterPosition(messageBuffer);
+                messageBuffer = null;
             }
         };
 
-        window.addEventListener('message', handleMessage);
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'parent-scroll-info' || event.data?.type === 'parent-resize-info') {
+                const viewportData = event.data as ParentViewportInfo;
+
+                // Buffer messages to prevent excessive updates
+                messageBuffer = viewportData;
+
+                if (bufferTimer) {
+                    clearTimeout(bufferTimer);
+                }
+
+                bufferTimer = setTimeout(processBufferedMessage, DEBOUNCE_DELAY);
+            }
+        };
+
+        window.addEventListener('message', handleMessage, { passive: true });
 
         return () => {
             window.removeEventListener('message', handleMessage);
+            if (bufferTimer) {
+                clearTimeout(bufferTimer);
+            }
         };
-    }, [isInIframe, calculateToasterPosition]);
+    }, [isInIframe, updateToasterPosition]);
 
-    // Also listen for custom events (backup method)
+    // Optimized custom event handling
     useEffect(() => {
         if (!isInIframe) return;
 
         const handleParentViewportChange = (event: CustomEvent<ParentViewportInfo>) => {
-            const viewportData = event.detail;
-            setParentViewport(viewportData);
-
-            // Calculate new toaster position
-            const newOffset = calculateToasterPosition(viewportData);
-            setToasterOffset(newOffset);
+            updateToasterPosition(event.detail);
         };
 
         const handleIframeHeightChange = () => {
-            // When iframe height changes, recalculate position if we have parent viewport data
-            if (parentViewport) {
-                const newOffset = calculateToasterPosition(parentViewport);
-                setToasterOffset(newOffset);
+            // Only recalculate if we have recent viewport data
+            if (parentViewport && performance.now() - lastPositionUpdateRef.current < 1000) {
+                updateToasterPosition(parentViewport);
             }
         };
 
-        // Listen for parent viewport changes
-        window.addEventListener('parent-viewport-change', handleParentViewportChange as EventListener);
-
-        // Listen for iframe height changes
-        window.addEventListener('iframe-height-changed', handleIframeHeightChange as EventListener);
+        window.addEventListener('parent-viewport-change', handleParentViewportChange as EventListener, { passive: true });
+        window.addEventListener('iframe-height-changed', handleIframeHeightChange as EventListener, { passive: true });
 
         return () => {
             window.removeEventListener('parent-viewport-change', handleParentViewportChange as EventListener);
             window.removeEventListener('iframe-height-changed', handleIframeHeightChange as EventListener);
         };
-    }, [isInIframe, parentViewport, calculateToasterPosition]);
+    }, [isInIframe, parentViewport, updateToasterPosition]);
 
-    useEffect(() => {
-        if (!isInIframe) return;
+    // Memoized CSS styles to prevent unnecessary re-renders
+    const toasterStyles = useMemo(() => {
+        if (!isInIframe) return '';
 
-        // Create dynamic styles for iframe positioning
-        const style = document.createElement('style');
-        style.id = 'iframe-toaster-fix';
-        style.textContent = `
+        return `
             [data-sonner-toaster] {
                 position: fixed !important;
                 top: ${toasterOffset}px !important;
@@ -141,6 +206,7 @@ export default function ViewportToaster() {
                 transform: translateX(-50%) !important;
                 z-index: 9999 !important;
                 pointer-events: auto !important;
+                transition: top 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
             }
             
             [data-sonner-toast] {
@@ -148,35 +214,60 @@ export default function ViewportToaster() {
                 pointer-events: auto !important;
             }
             
-            /* Ensure toasts are always visible */
             [data-sonner-toaster][data-theme="light"] {
                 --normal-bg: oklch(0.971 0.013 17.38);
                 --normal-border: oklch(0.89 0.013 17.38);
                 --normal-text: oklch(0.396 0.141 25.723);
             }
         `;
+    }, [isInIframe, toasterOffset]);
 
-        document.head.appendChild(style);
+    // Optimized style injection
+    useEffect(() => {
+        if (!isInIframe) return;
+
+        let styleElement = document.getElementById('iframe-toaster-fix') as HTMLStyleElement;
+
+        if (!styleElement) {
+            styleElement = document.createElement('style');
+            styleElement.id = 'iframe-toaster-fix';
+            document.head.appendChild(styleElement);
+        }
+
+        // Only update if content changed
+        if (styleElement.textContent !== toasterStyles) {
+            styleElement.textContent = toasterStyles;
+        }
 
         return () => {
+            // Don't remove style element on every re-render, only on unmount
             const existingStyle = document.getElementById('iframe-toaster-fix');
             if (existingStyle) {
                 existingStyle.remove();
             }
         };
-    }, [isInIframe, toasterOffset]);
+    }, [isInIframe, toasterStyles]);
 
-    // Debug logging (remove in production)
+    // Memoized toast options to prevent re-renders
+    const toastOptions = useMemo(() => ({
+        style: {
+            padding: "16px",
+            color: "oklch(0.396 0.141 25.723)",
+            backgroundColor: "oklch(0.971 0.013 17.38)",
+            fontSize: "1.15rem",
+            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05)",
+        },
+        duration: 4000,
+    }), []);
+
+    // Cleanup on unmount
     useEffect(() => {
-        if (isInIframe && parentViewport) {
-            console.log('Toast position updated:', {
-                toasterOffset,
-                iframeTop: parentViewport.iframeTop,
-                viewportHeight: parentViewport.viewportHeight,
-                scrollTop: parentViewport.scrollTop
-            });
-        }
-    }, [isInIframe, toasterOffset, parentViewport]);
+        return () => {
+            if (positionDebounceRef.current) {
+                clearTimeout(positionDebounceRef.current);
+            }
+        };
+    }, []);
 
     return (
         <Toaster
@@ -184,16 +275,7 @@ export default function ViewportToaster() {
             expand={true}
             richColors
             closeButton
-            toastOptions={{
-                style: {
-                    padding: "16px",
-                    color: "oklch(0.396 0.141 25.723)",
-                    backgroundColor: "oklch(0.971 0.013 17.38)",
-                    fontSize: "1.15rem",
-                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05)",
-                },
-                duration: 4000,
-            }}
+            toastOptions={toastOptions}
         />
     );
 }
