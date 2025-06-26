@@ -274,7 +274,7 @@ export default function ViewportToaster() {
             position="top-center"
             expand={true}
             richColors
-            closeButton
+            // closeButton
             toastOptions={toastOptions}
         />
     );
