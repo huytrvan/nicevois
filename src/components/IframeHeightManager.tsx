@@ -13,7 +13,7 @@ const HEIGHT_THRESHOLD = 3; // Reduced threshold for smoother updates
 const CRITICAL_HEIGHT_THRESHOLD = 10; // For critical changes that bypass debouncing
 const DEBOUNCE_DELAY = 8; // Reduced for smoother experience (~120fps)
 const MUTATION_DEBOUNCE_DELAY = 50; // Reduced mutation delay
-const RESIZE_DEBOUNCE_DELAY = 16; // Separate resize delay
+const RESIZE_DEBOUNCE_DELAY = 8; // Separate resize delay
 
 interface MessageData {
     type: string;

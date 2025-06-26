@@ -19,7 +19,7 @@ interface ParentViewportInfo {
 
 const POSITION_UPDATE_THRESHOLD = 10; // Only update position if change is >10px
 const DEBOUNCE_DELAY = 8; // Reduced debounce for smoother updates
-const POSITION_CACHE_DURATION = 16; // Cache position at 60fps
+const POSITION_CACHE_DURATION = 8; // Cache position at 120fps
 
 export default function ViewportToaster() {
     const [isInIframe, setIsInIframe] = useState(false);
