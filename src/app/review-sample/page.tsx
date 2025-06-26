@@ -486,7 +486,7 @@ function OrderReviewPageContent() {
                                         <div className="p-4 border-t bg-gray-50">
                                             <div className="space-y-6">
                                                 <p className="text-gray-700 leading-relaxed">
-                                                    Not sure if the new lyric changes will meet your expectation? Request a 10–15 second sample audio preview for just US$2!
+                                                    Not sure if the new lyric changes will meet your expectation? You can request a 10–15 second sample audio preview for just US$2!
                                                 </p>
 
                                                 <div className="bg-yellow-50 border border-yellow-400 rounded-md p-4 leading-8">
