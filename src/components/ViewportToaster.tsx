@@ -1,3 +1,4 @@
+// src\components\ViewportToaster.tsx
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -31,17 +32,18 @@ export default function ViewportToaster() {
             }
         };
 
-        setIsInIframe(checkIframe());
+        const inIframe = checkIframe();
+        setIsInIframe(inIframe);
 
         // Request scroll updates from parent if we're in iframe
-        if (checkIframe()) {
+        if (inIframe) {
             try {
                 window.parent.postMessage({
                     type: 'request-scroll-updates',
                     source: 'ViewportToaster'
                 }, '*');
             } catch {
-                // Handle cross-origin restrictions
+                console.warn('Failed to request scroll updates from parent');
             }
         }
     }, []);
@@ -69,6 +71,30 @@ export default function ViewportToaster() {
         return Math.max(minOffset, Math.min(maxOffset, centerOfVisible - 50)); // -50 to account for toast height
     }, []);
 
+    // Listen for direct postMessage events from parent
+    useEffect(() => {
+        if (!isInIframe) return;
+
+        const handleMessage = (event: MessageEvent) => {
+            // Handle parent viewport messages directly
+            if (event.data?.type === 'parent-scroll-info' || event.data?.type === 'parent-resize-info') {
+                const viewportData = event.data as ParentViewportInfo;
+                setParentViewport(viewportData);
+
+                // Calculate new toaster position
+                const newOffset = calculateToasterPosition(viewportData);
+                setToasterOffset(newOffset);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+
+        return () => {
+            window.removeEventListener('message', handleMessage);
+        };
+    }, [isInIframe, calculateToasterPosition]);
+
+    // Also listen for custom events (backup method)
     useEffect(() => {
         if (!isInIframe) return;
 
@@ -139,6 +165,18 @@ export default function ViewportToaster() {
             }
         };
     }, [isInIframe, toasterOffset]);
+
+    // Debug logging (remove in production)
+    useEffect(() => {
+        if (isInIframe && parentViewport) {
+            console.log('Toast position updated:', {
+                toasterOffset,
+                iframeTop: parentViewport.iframeTop,
+                viewportHeight: parentViewport.viewportHeight,
+                scrollTop: parentViewport.scrollTop
+            });
+        }
+    }, [isInIframe, toasterOffset, parentViewport]);
 
     return (
         <Toaster

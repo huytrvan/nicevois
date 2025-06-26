@@ -147,26 +147,35 @@ export default function IframeHeightManager() {
         }, MUTATION_DEBOUNCE_DELAY);
     }, [debouncedHeightUpdate]);
 
-    // Listen for parent scroll messages and relay to toast
+    // Enhanced message handling for parent viewport data
     useEffect(() => {
         const handleParentMessage = (event: MessageEvent) => {
+            // Handle parent scroll/resize info and forward to all components
             if (event.data?.type === 'parent-scroll-info' || event.data?.type === 'parent-resize-info') {
-                // Relay to toast component
+                // Forward directly to all window listeners (including ViewportToaster)
+                window.dispatchEvent(new MessageEvent('message', {
+                    data: event.data,
+                    origin: event.origin,
+                    source: event.source
+                }));
+
+                // Also dispatch custom event for compatibility
                 window.dispatchEvent(new CustomEvent('parent-viewport-change', {
                     detail: event.data
                 }));
             }
 
             // Handle requests for scroll updates
-            if (event.data?.type === 'request-scroll-updates' && event.data?.source === 'ViewportToaster') {
-                // Send current state
+            if (event.data?.type === 'request-scroll-updates') {
+                // Send confirmation that we're ready
                 try {
                     window.parent.postMessage({
                         type: 'iframe-ready-for-scroll-updates',
-                        source: 'IframeHeightManager'
+                        source: 'IframeHeightManager',
+                        timestamp: Date.now()
                     }, '*');
-                } catch {
-                    // Handle cross-origin restrictions
+                } catch (error) {
+                    console.warn('Failed to send ready message to parent:', error);
                 }
             }
         };
@@ -177,6 +186,29 @@ export default function IframeHeightManager() {
             window.removeEventListener('message', handleParentMessage);
         };
     }, []);
+
+    // Send initial ready message to parent
+    useEffect(() => {
+        if (!isEmbeddedInShopify()) return;
+
+        // Send initial message to parent that we're ready for scroll updates
+        const sendReadyMessage = () => {
+            try {
+                window.parent.postMessage({
+                    type: 'iframe-ready-for-scroll-updates',
+                    source: 'IframeHeightManager',
+                    timestamp: Date.now()
+                }, '*');
+            } catch (error) {
+                console.warn('Failed to send initial ready message:', error);
+            }
+        };
+
+        // Send immediately and after a short delay
+        sendReadyMessage();
+        setTimeout(sendReadyMessage, 100);
+        setTimeout(sendReadyMessage, 500);
+    }, [isEmbeddedInShopify]);
 
     useEffect(() => {
         if (typeof window === "undefined" || isInitializedRef.current || !isEmbeddedInShopify()) {
