@@ -205,19 +205,7 @@ export default function ViewportToaster() {
                 left: 50% !important;
                 transform: translateX(-50%) !important;
                 z-index: 9999 !important;
-                pointer-events: auto !important;
                 transition: top 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            }
-            
-            [data-sonner-toast] {
-                position: relative !important;
-                pointer-events: auto !important;
-            }
-            
-            [data-sonner-toaster][data-theme="light"] {
-                --normal-bg: oklch(0.971 0.013 17.38);
-                --normal-border: oklch(0.89 0.013 17.38);
-                --normal-text: oklch(0.396 0.141 25.723);
             }
         `;
     }, [isInIframe, toasterOffset]);
