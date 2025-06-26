@@ -32,6 +32,7 @@ function ChangeLyricsPageContent() {
     // State definitions
     const [currentStep, setCurrentStep] = useState(2);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [loadingButton, setLoadingButton] = useState<'sample' | 'review' | null>(null);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [originalLyricsText, setOriginalLyricsText] = useState<string>('');
     const [isError, setIsError] = useState<boolean>(false);
@@ -397,9 +398,10 @@ function ChangeLyricsPageContent() {
         return { isValid, errors }; // Return both the validity and the errors object
     };
 
-    const handleNextStep = async (e: React.FormEvent, path: string) => {
-        setIsLoading(true);
+    const handleNextStep = async (e: React.FormEvent, path: string, buttonType: 'sample' | 'review' | null) => {
+        setLoadingButton(buttonType); // Set which button is loading
         e.preventDefault();
+
         const hasChanges = lyrics.some((line) =>
             line.wordChanges && line.wordChanges.some(change => change.hasChanged)
         );
@@ -407,31 +409,31 @@ function ChangeLyricsPageContent() {
             toast.error('Unable to proceed: No changes were made.', {
                 description: 'Please modify at least one lyric before proceeding.',
             });
+            setLoadingButton(null); // Reset loading state
             return;
         }
 
-        // Run validation and get the fresh errors object
         const { isValid, errors } = validateForm();
 
-        // Show toast for special requests error if that's the issue
         if (!isValid) {
             if (errors.specialRequests) {
                 toast.error('Special request too long', {
                     description: errors.specialRequests,
                 });
+                setLoadingButton(null); // Reset loading state
                 return;
             }
 
-            // Show toast for other validation errors
             const firstError = Object.values(errors)[0];
             toast.error('Invalid input', {
                 description: firstError || 'Please fix the errors in the form',
             });
+            setLoadingButton(null); // Reset loading state
             return;
         }
 
         try {
-            // Store lyric-related data
+            // Your existing localStorage and navigation logic...
             localStorage.setItem('lyrics', JSON.stringify(lyrics));
             localStorage.setItem('cost', cost.toString());
             localStorage.setItem('currentStep', (currentStep + 1).toString());
@@ -439,7 +441,6 @@ function ChangeLyricsPageContent() {
             localStorage.setItem('formValues', JSON.stringify(formValues));
             localStorage.setItem('deliveryOption', 'Standard Delivery');
 
-            // Store song information safely in localStorage
             if (songId) localStorage.setItem('songId', songId);
             if (songTitle) localStorage.setItem('songTitle', songTitle);
             if (songArtist) localStorage.setItem('songArtist', songArtist);
@@ -454,6 +455,7 @@ function ChangeLyricsPageContent() {
             toast.error('Error', {
                 description: 'Failed to save data. Please try again.',
             });
+            setLoadingButton(null); // Reset loading state
         }
     };
 
@@ -516,11 +518,11 @@ function ChangeLyricsPageContent() {
             {!isError && (
                 <div className="ml-auto flex items-center gap-2">
                     <button
-                        disabled={isLoading}
-                        onClick={(e) => handleNextStep(e, '/review-sample')}
+                        disabled={loadingButton !== null} // Disable both buttons when either is loading
+                        onClick={(e) => handleNextStep(e, '/review-sample', 'sample')}
                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 text-primary bg-primary text-white opacity-80 hover:opacity-90 hover:ring-blue-900/50 focus-visible:ring focus-visible:ring-blue-900/50 active:opacity-90 active:ring-0 px-2 rounded-md text-sm md:text-base h-10 md:h-12 mr-1"
                     >
-                        {isLoading ? (
+                        {loadingButton === 'sample' ? (
                             "Processing..."
                         ) : (
                             <>
@@ -528,15 +530,14 @@ function ChangeLyricsPageContent() {
                                 View Sample
                             </>
                         )}
-
                     </button>
                     <button
-                        onClick={(e) => handleNextStep(e, '/review')}
-                        disabled={isLoading}
+                        onClick={(e) => handleNextStep(e, '/review', 'review')}
+                        disabled={loadingButton !== null} // Disable both buttons when either is loading
                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-normal transition duration-150 hover:ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:transform-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/95 hover:ring-primary/50 focus-visible:ring focus-visible:ring-primary/50 active:bg-primary/75 active:ring-0 px-5 rounded-md text-sm md:text-base h-10 md:h-12"
                         type="button"
                     >
-                        {isLoading ? (
+                        {loadingButton === 'review' ? (
                             "Processing..."
                         ) : (
                             <>
@@ -725,7 +726,7 @@ function ChangeLyricsPageContent() {
 
                             {/* Lyrics editor */}
                             {!isLoading && (
-                                <Form.Root className="flex flex-1 flex-col gap-4 pt-2 pb-4" onSubmit={(e) => handleNextStep(e, '/review')}>
+                                <Form.Root className="flex flex-1 flex-col gap-4 pt-2 pb-4" onSubmit={(e) => handleNextStep(e, '/review', null)}>
                                     <div className="mt-2 overflow-y-auto max-h-[85vh]">
                                         <div className="relative w-full overflow-visible">
                                             <table className="caption-bottom text-sm relative h-10 w-full text-clip">
