@@ -21,20 +21,22 @@ const BackButton: React.FC<BackButtonProps> = ({
         if (!enableReloadProtection) return;
 
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            // If we're navigating programmatically, don't show dialog
+            // Let PostHog do its thing first by not preventing immediately
+            // Only prevent the actual browser dialog for reloads/close
+
             if (isNavigatingRef.current) {
+                // This is our programmatic navigation - let it proceed
                 return;
             }
 
-            // Only show dialog for actual reloads or browser close
-            if (e.type === 'beforeunload') {
-                e.preventDefault();
-                e.returnValue = "";
-                return "";
-            }
+            // This is likely a real reload/close - show the confirmation
+            e.preventDefault();
+            e.returnValue = "";
+            return "";
         };
 
-        window.addEventListener("beforeunload", handleBeforeUnload);
+        // Add our handler with passive: false to ensure we can prevent default
+        window.addEventListener("beforeunload", handleBeforeUnload, { passive: false });
 
         return () => {
             window.removeEventListener("beforeunload", handleBeforeUnload);
