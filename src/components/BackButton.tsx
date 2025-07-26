@@ -16,25 +16,23 @@ const BackButton: React.FC<BackButtonProps> = ({
 }) => {
     const router = useRouter();
 
-    // Add beforeunload event listener for reload/URL change protection
     useEffect(() => {
         if (!enableReloadProtection) return;
 
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            // Modern browsers ignore custom messages for security reasons
-            // They show their own generic message like "Reload site? Changes you made may not be saved."
+            // Check if this is a programmatic navigation vs actual page leave
+            if (window.performance?.navigation?.type === 0) { // Navigate (not reload)
+                return; // Let PostHog handle it
+            }
+
+            // Only prevent for actual reloads/close
             e.preventDefault();
-            e.returnValue = ""; // Empty string or any truthy value triggers the dialog
-            return ""; // This return value is ignored by modern browsers
+            e.returnValue = "";
+            return "";
         };
 
-        // Add the event listener
         window.addEventListener("beforeunload", handleBeforeUnload);
-
-        // Cleanup function to remove the event listener
-        return () => {
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-        };
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
     }, [enableReloadProtection]);
 
     const handleBackClick = () => {
